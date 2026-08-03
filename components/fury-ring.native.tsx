@@ -1,5 +1,11 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  LayoutChangeEvent,
+  PanResponder,
+  StyleSheet,
+  View,
+} from "react-native";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 
 const CANVAS_SIZE = 320;
@@ -9,6 +15,12 @@ const RING_STROKE_WIDTH = 18;
 const GAP_SIZE_DEGREES = 60;
 const ROTATION_DURATION_MS = 4000;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
+const TAP_MOVEMENT_THRESHOLD = 8;
+const EDGE_MARGIN = 16;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
 
 function createRingPath() {
   const path = Skia.Path.Make();
@@ -34,10 +46,18 @@ const ringPath = createRingPath();
 
 export default function FuryRing() {
   const rotation = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
   const angleRef = useRef(0);
   const directionRef = useRef(1);
   const lastTimestampRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
+
+  const ringYRef = useRef(0);
+  const dragStartYRef = useRef(0);
+  const maxDragDistanceRef = useRef(0);
+
+  const [containerHeight, setContainerHeight] = useState(0);
 
   useEffect(() => {
     const animate = (timestamp: number) => {
@@ -70,33 +90,89 @@ export default function FuryRing() {
     directionRef.current *= -1;
   };
 
+  const getVerticalLimit = () => {
+    if (containerHeight <= 0) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      containerHeight / 2 -
+        RING_RADIUS -
+        RING_STROKE_WIDTH / 2 -
+        EDGE_MARGIN,
+    );
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragStartYRef.current = ringYRef.current;
+        maxDragDistanceRef.current = 0;
+      },
+      onPanResponderMove: (_event, gestureState) => {
+        const dragDistance = Math.hypot(gestureState.dx, gestureState.dy);
+        maxDragDistanceRef.current = Math.max(
+          maxDragDistanceRef.current,
+          dragDistance,
+        );
+
+        const verticalLimit = getVerticalLimit();
+        const nextY = clamp(
+          dragStartYRef.current + gestureState.dy,
+          -verticalLimit,
+          verticalLimit,
+        );
+
+        ringYRef.current = nextY;
+        translateY.setValue(nextY);
+      },
+      onPanResponderRelease: () => {
+        if (maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD) {
+          reverseDirection();
+        }
+      },
+      onPanResponderTerminate: () => {
+        maxDragDistanceRef.current = 0;
+      },
+    }),
+  ).current;
+
   const rotate = rotation.interpolate({
     inputRange: [0, 360],
     outputRange: ["0deg", "360deg"],
   });
 
+  const handleLayout = (event: LayoutChangeEvent) => {
+    setContainerHeight(event.nativeEvent.layout.height);
+  };
+
   return (
-    <View style={styles.container}>
-      <Pressable onPress={reverseDirection}>
-        <Animated.View
-          style={[
-            styles.ringSurface,
-            {
-              transform: [{ rotate }],
-            },
-          ]}
-        >
-          <Canvas style={styles.canvas}>
-            <Path
-              path={ringPath}
-              color="black"
-              style="stroke"
-              strokeWidth={RING_STROKE_WIDTH}
-              strokeCap="round"
-            />
-          </Canvas>
-        </Animated.View>
-      </Pressable>
+    <View
+      style={styles.container}
+      onLayout={handleLayout}
+      {...panResponder.panHandlers}
+    >
+      <Animated.View
+        style={[
+          styles.ringSurface,
+          {
+            transform: [{ translateY }, { rotate }],
+          },
+        ]}
+      >
+        <Canvas style={styles.canvas}>
+          <Path
+            path={ringPath}
+            color="black"
+            style="stroke"
+            strokeWidth={RING_STROKE_WIDTH}
+            strokeCap="round"
+          />
+        </Canvas>
+      </Animated.View>
     </View>
   );
 }
