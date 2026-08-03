@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
+  Easing,
   PanResponder,
   StyleSheet,
   View,
@@ -17,6 +18,9 @@ const ROTATION_DURATION_MS = 4000;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
+
+const TEST_OBJECT_SIZE = 24;
+const TEST_OBJECT_TRAVEL_MS = 3500;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -45,10 +49,11 @@ function createRingPath() {
 const ringPath = createRingPath();
 
 export default function FuryRing() {
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
+  const testObjectProgress = useRef(new Animated.Value(0)).current;
 
   const angleRef = useRef(0);
   const directionRef = useRef(1);
@@ -88,6 +93,25 @@ export default function FuryRing() {
       }
     };
   }, [rotation]);
+
+  useEffect(() => {
+    testObjectProgress.setValue(0);
+
+    const animation = Animated.loop(
+      Animated.timing(testObjectProgress, {
+        toValue: 1,
+        duration: TEST_OBJECT_TRAVEL_MS,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [testObjectProgress, windowWidth]);
 
   const reverseDirection = () => {
     directionRef.current *= -1;
@@ -146,8 +170,26 @@ export default function FuryRing() {
     outputRange: ["0deg", "360deg"],
   });
 
+  const objectTranslateX = testObjectProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      windowWidth / 2 + TEST_OBJECT_SIZE,
+      -(windowWidth / 2 + TEST_OBJECT_SIZE),
+    ],
+  });
+
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.testObject,
+          {
+            transform: [{ translateX: objectTranslateX }],
+          },
+        ]}
+      />
+
       <Animated.View
         pointerEvents="none"
         style={[
@@ -188,6 +230,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffffff",
+  },
+  testObject: {
+    position: "absolute",
+    width: TEST_OBJECT_SIZE,
+    height: TEST_OBJECT_SIZE,
+    borderRadius: TEST_OBJECT_SIZE / 2,
+    backgroundColor: "black",
   },
   movementLayer: {
     width: CANVAS_SIZE,
