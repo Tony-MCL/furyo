@@ -8,6 +8,7 @@ import {
   Animated,
   Easing,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -367,6 +368,23 @@ export default function FuryRing() {
     setGameOver(true);
   }, []);
 
+  const restartGame = useCallback(() => {
+    setBalls([]);
+    nextBallIdRef.current = 1;
+    ringYRef.current = 0;
+    dragStartYRef.current = 0;
+    maxDragDistanceRef.current = 0;
+    translateY.setValue(0);
+
+    angleRef.current = 0;
+    directionRef.current = 1;
+    lastTimestampRef.current = null;
+    rotation.setValue(0);
+
+    gameOverRef.current = false;
+    setGameOver(false);
+  }, [rotation, translateY]);
+
   const getRingState = useCallback(
     (): RingState => ({
       y: ringYRef.current,
@@ -488,9 +506,10 @@ export default function FuryRing() {
       </Animated.View>
 
       {gameOver && (
-        <View pointerEvents="none" style={styles.gameOverOverlay}>
+        <Pressable style={styles.gameOverOverlay} onPress={restartGame}>
           <Text style={styles.gameOverText}>GAME OVER</Text>
-        </View>
+          <Text style={styles.restartText}>Tap to restart</Text>
+        </Pressable>
       )}
     </View>
   );
@@ -533,11 +552,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.72)",
+    cursor: "pointer",
   },
   gameOverText: {
     fontSize: 32,
     fontWeight: "800",
     letterSpacing: 2,
+    color: "black",
+  },
+  restartText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: "600",
     color: "black",
   },
 });
