@@ -30,12 +30,14 @@ const EDGE_MARGIN = 16;
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
 const BALL_SPAWN_INTERVAL_START_MS = 1100;
-const BALL_SPAWN_INTERVAL_FINAL_MS = 350;
+const BALL_SPAWN_INTERVAL_AT_12_MS = 350;
+const BALL_SPAWN_INTERVAL_FINAL_MS = 200;
 const BALL_MIN_TRAVEL_MS = 3600;
 const BALL_MAX_TRAVEL_MS = 5000;
 const START_MAX_BALLS = 5;
-const FINAL_MAX_BALLS = 12;
-const BALL_COUNT_STEP_MS = 15000;
+const MID_MAX_BALLS = 12;
+const FINAL_MAX_BALLS = 20;
+const BALL_COUNT_STEP_MS = 8000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
 
 const COLLISION_HALF_WIDTH = STROKE_WIDTH / 2 + BALL_RADIUS;
@@ -92,13 +94,26 @@ function getMaxActiveBalls(elapsedMs: number) {
 
 function getSpawnInterval(elapsedMs: number) {
   const maxActiveBalls = getMaxActiveBalls(elapsedMs);
+
+  if (maxActiveBalls <= MID_MAX_BALLS) {
+    const progress =
+      (maxActiveBalls - START_MAX_BALLS) /
+      (MID_MAX_BALLS - START_MAX_BALLS);
+
+    return Math.round(
+      BALL_SPAWN_INTERVAL_START_MS +
+        (BALL_SPAWN_INTERVAL_AT_12_MS - BALL_SPAWN_INTERVAL_START_MS) *
+          progress,
+    );
+  }
+
   const progress =
-    (maxActiveBalls - START_MAX_BALLS) /
-    (FINAL_MAX_BALLS - START_MAX_BALLS);
+    (maxActiveBalls - MID_MAX_BALLS) /
+    (FINAL_MAX_BALLS - MID_MAX_BALLS);
 
   return Math.round(
-    BALL_SPAWN_INTERVAL_START_MS +
-      (BALL_SPAWN_INTERVAL_FINAL_MS - BALL_SPAWN_INTERVAL_START_MS) *
+    BALL_SPAWN_INTERVAL_AT_12_MS +
+      (BALL_SPAWN_INTERVAL_FINAL_MS - BALL_SPAWN_INTERVAL_AT_12_MS) *
         progress,
   );
 }
