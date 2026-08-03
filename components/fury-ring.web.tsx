@@ -20,7 +20,7 @@ const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
 
-const TEST_OBJECT_SIZE = 24;
+const TEST_OBJECT_SIZE = 12;
 const TEST_OBJECT_TRAVEL_MS = 3500;
 
 const circumference = 2 * Math.PI * RADIUS;
