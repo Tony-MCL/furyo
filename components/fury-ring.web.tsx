@@ -9,6 +9,7 @@ import {
   Easing,
   PanResponder,
   StyleSheet,
+  Text,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -26,11 +27,20 @@ const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
 
 const BALL_SIZE = 12;
+const BALL_RADIUS = BALL_SIZE / 2;
 const BALL_SPAWN_INTERVAL_MS = 1100;
 const BALL_MIN_TRAVEL_MS = 3600;
 const BALL_MAX_TRAVEL_MS = 5000;
 const MAX_BALLS = 5;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
+
+const COLLISION_HALF_WIDTH = STROKE_WIDTH / 2 + BALL_RADIUS;
+const COLLISION_INNER_RADIUS = RADIUS - COLLISION_HALF_WIDTH;
+const COLLISION_OUTER_RADIUS = RADIUS + COLLISION_HALF_WIDTH;
+const BALL_ANGULAR_CLEARANCE_DEGREES =
+  (Math.asin(Math.min(1, BALL_RADIUS / RADIUS)) * 180) / Math.PI;
+const SAFE_GAP_HALF_DEGREES =
+  GAP_DEGREES / 2 - BALL_ANGULAR_CLEARANCE_DEGREES;
 
 type Edge = "top" | "right" | "bottom" | "left";
 
@@ -41,6 +51,12 @@ type BallData = {
   endX: number;
   endY: number;
   duration: number;
+};
+
+type RingState = {
+  y: number;
+  angle: number;
+  gameOver: boolean;
 };
 
 const circumference = 2 * Math.PI * RADIUS;
@@ -55,6 +71,14 @@ function clamp(value: number, min: number, max: number) {
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
+}
+
+function normalizeAngle(angle: number) {
+  return ((angle % 360) + 360) % 360;
+}
+
+function shortestAngleDifference(a: number, b: number) {
+  return ((a - b + 540) % 360) - 180;
 }
 
 function getOppositeEdge(edge: Edge): Edge {
@@ -140,15 +164,65 @@ function createBall(id: number, width: number, height: number): BallData {
   };
 }
 
+function ballHitsRing(ballX: number, ballY: number, ring: RingState) {
+  const relativeX = ballX;
+  const relativeY = ballY - ring.y;
+  const distance = Math.hypot(relativeX, relativeY);
+
+  if (
+    distance < COLLISION_INNER_RADIUS ||
+    distance > COLLISION_OUTER_RADIUS
+  ) {
+    return false;
+  }
+
+  const ballAngle = normalizeAngle(
+    (Math.atan2(relativeY, relativeX) * 180) / Math.PI,
+  );
+  const gapCenterAngle = normalizeAngle(ring.angle);
+  const angleFromGapCenter = Math.abs(
+    shortestAngleDifference(ballAngle, gapCenterAngle),
+  );
+
+  return angleFromGapCenter > SAFE_GAP_HALF_DEGREES;
+}
+
 type SpawnBallProps = {
   ball: BallData;
+  getRingState: () => RingState;
+  onCollision: () => void;
   onDone: (id: number) => void;
 };
 
-function SpawnBall({ ball, onDone }: SpawnBallProps) {
+function SpawnBall({
+  ball,
+  getRingState,
+  onCollision,
+  onDone,
+}: SpawnBallProps) {
   const progress = useRef(new Animated.Value(0)).current;
+  const collidedRef = useRef(false);
 
   useEffect(() => {
+    const listenerId = progress.addListener(({ value }) => {
+      if (collidedRef.current) {
+        return;
+      }
+
+      const ring = getRingState();
+      if (ring.gameOver) {
+        return;
+      }
+
+      const x = ball.startX + (ball.endX - ball.startX) * value;
+      const y = ball.startY + (ball.endY - ball.startY) * value;
+
+      if (ballHitsRing(x, y, ring)) {
+        collidedRef.current = true;
+        onCollision();
+      }
+    });
+
     const animation = Animated.timing(progress, {
       toValue: 1,
       duration: ball.duration,
@@ -157,15 +231,16 @@ function SpawnBall({ ball, onDone }: SpawnBallProps) {
     });
 
     animation.start(({ finished }) => {
-      if (finished) {
+      if (finished && !collidedRef.current) {
         onDone(ball.id);
       }
     });
 
     return () => {
+      progress.removeListener(listenerId);
       animation.stop();
     };
-  }, [ball, onDone, progress]);
+  }, [ball, getRingState, onCollision, onDone, progress]);
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],
@@ -206,26 +281,31 @@ export default function FuryRing() {
   const maxDragDistanceRef = useRef(0);
   const windowHeightRef = useRef(windowHeight);
   const nextBallIdRef = useRef(1);
+  const gameOverRef = useRef(false);
 
   const [balls, setBalls] = useState<BallData[]>([]);
+  const [gameOver, setGameOver] = useState(false);
 
   windowHeightRef.current = windowHeight;
 
   useEffect(() => {
     const animate = (timestamp: number) => {
-      if (lastTimestampRef.current !== null) {
-        const deltaMs = timestamp - lastTimestampRef.current;
+      if (!gameOverRef.current) {
+        if (lastTimestampRef.current !== null) {
+          const deltaMs = timestamp - lastTimestampRef.current;
 
-        angleRef.current =
-          (angleRef.current +
-            directionRef.current * DEGREES_PER_MS * deltaMs +
-            360) %
-          360;
+          angleRef.current =
+            (angleRef.current +
+              directionRef.current * DEGREES_PER_MS * deltaMs +
+              360) %
+            360;
 
-        rotation.setValue(angleRef.current);
+          rotation.setValue(angleRef.current);
+        }
+
+        lastTimestampRef.current = timestamp;
       }
 
-      lastTimestampRef.current = timestamp;
       frameRef.current = requestAnimationFrame(animate);
     };
 
@@ -239,11 +319,15 @@ export default function FuryRing() {
   }, [rotation]);
 
   useEffect(() => {
-    if (windowWidth <= 0 || windowHeight <= 0) {
+    if (windowWidth <= 0 || windowHeight <= 0 || gameOver) {
       return;
     }
 
     const spawnBall = () => {
+      if (gameOverRef.current) {
+        return;
+      }
+
       setBalls((currentBalls) => {
         if (currentBalls.length >= MAX_BALLS) {
           return currentBalls;
@@ -265,9 +349,8 @@ export default function FuryRing() {
 
     return () => {
       clearInterval(interval);
-      setBalls([]);
     };
-  }, [windowHeight, windowWidth]);
+  }, [gameOver, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) =>
@@ -275,8 +358,28 @@ export default function FuryRing() {
     );
   }, []);
 
+  const handleCollision = useCallback(() => {
+    if (gameOverRef.current) {
+      return;
+    }
+
+    gameOverRef.current = true;
+    setGameOver(true);
+  }, []);
+
+  const getRingState = useCallback(
+    (): RingState => ({
+      y: ringYRef.current,
+      angle: angleRef.current,
+      gameOver: gameOverRef.current,
+    }),
+    [],
+  );
+
   const reverseDirection = () => {
-    directionRef.current *= -1;
+    if (!gameOverRef.current) {
+      directionRef.current *= -1;
+    }
   };
 
   const getVerticalLimit = () =>
@@ -290,15 +393,19 @@ export default function FuryRing() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
+      onStartShouldSetPanResponder: () => !gameOverRef.current,
+      onStartShouldSetPanResponderCapture: () => !gameOverRef.current,
+      onMoveShouldSetPanResponder: () => !gameOverRef.current,
+      onMoveShouldSetPanResponderCapture: () => !gameOverRef.current,
       onPanResponderGrant: () => {
         dragStartYRef.current = ringYRef.current;
         maxDragDistanceRef.current = 0;
       },
       onPanResponderMove: (_event, gestureState) => {
+        if (gameOverRef.current) {
+          return;
+        }
+
         const dragDistance = Math.hypot(gestureState.dx, gestureState.dy);
         maxDragDistanceRef.current = Math.max(
           maxDragDistanceRef.current,
@@ -316,7 +423,10 @@ export default function FuryRing() {
         translateY.setValue(nextY);
       },
       onPanResponderRelease: () => {
-        if (maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD) {
+        if (
+          !gameOverRef.current &&
+          maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD
+        ) {
           reverseDirection();
         }
       },
@@ -335,7 +445,13 @@ export default function FuryRing() {
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
       {balls.map((ball) => (
-        <SpawnBall key={ball.id} ball={ball} onDone={removeBall} />
+        <SpawnBall
+          key={ball.id}
+          ball={ball}
+          getRingState={getRingState}
+          onCollision={handleCollision}
+          onDone={removeBall}
+        />
       ))}
 
       <Animated.View
@@ -370,6 +486,12 @@ export default function FuryRing() {
           </Svg>
         </Animated.View>
       </Animated.View>
+
+      {gameOver && (
+        <View pointerEvents="none" style={styles.gameOverOverlay}>
+          <Text style={styles.gameOverText}>GAME OVER</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -405,5 +527,17 @@ const styles = StyleSheet.create({
   ringSurface: {
     width: SIZE,
     height: SIZE,
+  },
+  gameOverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
+  gameOverText: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "black",
   },
 });
