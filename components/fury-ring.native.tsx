@@ -158,6 +158,14 @@ function createBall(id: number, width: number, height: number): BallData {
   };
 }
 
+function getBallDistanceFromRingCenter(
+  ballX: number,
+  ballY: number,
+  ring: RingState,
+) {
+  return Math.hypot(ballX, ballY - ring.y);
+}
+
 function ballHitsRing(ballX: number, ballY: number, ring: RingState) {
   const relativeX = ballX;
   const relativeY = ballY - ring.y;
@@ -185,6 +193,7 @@ type SpawnBallProps = {
   ball: BallData;
   getRingState: () => RingState;
   onCollision: () => void;
+  onEaten: (id: number) => void;
   onDone: (id: number) => void;
 };
 
@@ -192,14 +201,15 @@ function SpawnBall({
   ball,
   getRingState,
   onCollision,
+  onEaten,
   onDone,
 }: SpawnBallProps) {
   const progress = useRef(new Animated.Value(0)).current;
-  const collidedRef = useRef(false);
+  const resolvedRef = useRef(false);
 
   useEffect(() => {
     const listenerId = progress.addListener(({ value }) => {
-      if (collidedRef.current) {
+      if (resolvedRef.current) {
         return;
       }
 
@@ -211,8 +221,14 @@ function SpawnBall({
       const x = ball.startX + (ball.endX - ball.startX) * value;
       const y = ball.startY + (ball.endY - ball.startY) * value;
 
+      if (getBallDistanceFromRingCenter(x, y, ring) < COLLISION_INNER_RADIUS) {
+        resolvedRef.current = true;
+        onEaten(ball.id);
+        return;
+      }
+
       if (ballHitsRing(x, y, ring)) {
-        collidedRef.current = true;
+        resolvedRef.current = true;
         onCollision();
       }
     });
@@ -225,7 +241,7 @@ function SpawnBall({
     });
 
     animation.start(({ finished }) => {
-      if (finished && !collidedRef.current) {
+      if (finished && !resolvedRef.current) {
         onDone(ball.id);
       }
     });
@@ -234,7 +250,7 @@ function SpawnBall({
       progress.removeListener(listenerId);
       animation.stop();
     };
-  }, [ball, getRingState, onCollision, onDone, progress]);
+  }, [ball, getRingState, onCollision, onDone, onEaten, progress]);
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],
@@ -483,6 +499,7 @@ export default function FuryRing() {
           ball={ball}
           getRingState={getRingState}
           onCollision={handleCollision}
+          onEaten={removeBall}
           onDone={removeBall}
         />
       ))}
