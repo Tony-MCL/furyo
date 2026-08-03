@@ -28,7 +28,8 @@ const EDGE_MARGIN = 16;
 
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
-const BALL_SPAWN_INTERVAL_MS = 1100;
+const BALL_SPAWN_INTERVAL_START_MS = 1100;
+const BALL_SPAWN_INTERVAL_FINAL_MS = 350;
 const BALL_MIN_TRAVEL_MS = 3600;
 const BALL_MAX_TRAVEL_MS = 5000;
 const START_MAX_BALLS = 5;
@@ -80,6 +81,19 @@ function shortestAngleDifference(a: number, b: number) {
 function getMaxActiveBalls(elapsedMs: number) {
   const addedBalls = Math.floor(elapsedMs / BALL_COUNT_STEP_MS);
   return Math.min(START_MAX_BALLS + addedBalls, FINAL_MAX_BALLS);
+}
+
+function getSpawnInterval(elapsedMs: number) {
+  const maxActiveBalls = getMaxActiveBalls(elapsedMs);
+  const progress =
+    (maxActiveBalls - START_MAX_BALLS) /
+    (FINAL_MAX_BALLS - START_MAX_BALLS);
+
+  return Math.round(
+    BALL_SPAWN_INTERVAL_START_MS +
+      (BALL_SPAWN_INTERVAL_FINAL_MS - BALL_SPAWN_INTERVAL_START_MS) *
+        progress,
+  );
 }
 
 function getOppositeEdge(edge: Edge): Edge {
@@ -363,13 +377,16 @@ export default function FuryRing() {
       return;
     }
 
-    const spawnBall = () => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const spawnAndSchedule = () => {
       if (gameOverRef.current) {
         return;
       }
 
       const elapsedMs = Date.now() - runStartTimeRef.current;
       const maxActiveBalls = getMaxActiveBalls(elapsedMs);
+      const spawnInterval = getSpawnInterval(elapsedMs);
 
       setBalls((currentBalls) => {
         if (currentBalls.length >= maxActiveBalls) {
@@ -385,13 +402,16 @@ export default function FuryRing() {
 
         return [...currentBalls, ball];
       });
+
+      timeoutId = setTimeout(spawnAndSchedule, spawnInterval);
     };
 
-    spawnBall();
-    const interval = setInterval(spawnBall, BALL_SPAWN_INTERVAL_MS);
+    spawnAndSchedule();
 
     return () => {
-      clearInterval(interval);
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     };
   }, [gameOver, windowHeight, windowWidth]);
 
