@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Animated,
-  LayoutChangeEvent,
   PanResponder,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
@@ -23,8 +23,6 @@ const circumference = 2 * Math.PI * RADIUS;
 const visibleFraction = (360 - GAP_DEGREES) / 360;
 const visibleLength = circumference * visibleFraction;
 const gapLength = circumference - visibleLength;
-
-// Flytter åpningen til høyre side uten SVG-transformasjon.
 const dashOffset = -gapLength / 2;
 
 function clamp(value: number, min: number, max: number) {
@@ -32,6 +30,8 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function FuryRing() {
+  const { height: windowHeight } = useWindowDimensions();
+
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -43,8 +43,9 @@ export default function FuryRing() {
   const ringYRef = useRef(0);
   const dragStartYRef = useRef(0);
   const maxDragDistanceRef = useRef(0);
+  const windowHeightRef = useRef(windowHeight);
 
-  const [containerHeight, setContainerHeight] = useState(0);
+  windowHeightRef.current = windowHeight;
 
   useEffect(() => {
     const animate = (timestamp: number) => {
@@ -77,21 +78,21 @@ export default function FuryRing() {
     directionRef.current *= -1;
   };
 
-  const getVerticalLimit = () => {
-    if (containerHeight <= 0) {
-      return 0;
-    }
-
-    return Math.max(
+  const getVerticalLimit = () =>
+    Math.max(
       0,
-      containerHeight / 2 - RADIUS - STROKE_WIDTH / 2 - EDGE_MARGIN,
+      windowHeightRef.current / 2 -
+        RADIUS -
+        STROKE_WIDTH / 2 -
+        EDGE_MARGIN,
     );
-  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: () => {
         dragStartYRef.current = ringYRef.current;
         maxDragDistanceRef.current = 0;
@@ -121,6 +122,7 @@ export default function FuryRing() {
       onPanResponderTerminate: () => {
         maxDragDistanceRef.current = 0;
       },
+      onShouldBlockNativeResponder: () => true,
     }),
   ).current;
 
@@ -129,37 +131,39 @@ export default function FuryRing() {
     outputRange: ["0deg", "360deg"],
   });
 
-  const handleLayout = (event: LayoutChangeEvent) => {
-    setContainerHeight(event.nativeEvent.layout.height);
-  };
-
   return (
-    <View
-      style={styles.container}
-      onLayout={handleLayout}
-      {...panResponder.panHandlers}
-    >
+    <View style={styles.container} {...panResponder.panHandlers}>
       <Animated.View
+        pointerEvents="none"
         style={[
-          styles.ringSurface,
+          styles.movementLayer,
           {
-            transform: [{ translateY }, { rotate }],
+            transform: [{ translateY }],
           },
         ]}
       >
-        <Svg width={SIZE} height={SIZE}>
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS}
-            fill="none"
-            stroke="black"
-            strokeWidth={STROKE_WIDTH}
-            strokeLinecap="round"
-            strokeDasharray={`${visibleLength} ${gapLength}`}
-            strokeDashoffset={dashOffset}
-          />
-        </Svg>
+        <Animated.View
+          style={[
+            styles.ringSurface,
+            {
+              transform: [{ rotate }],
+            },
+          ]}
+        >
+          <Svg width={SIZE} height={SIZE}>
+            <Circle
+              cx={CENTER}
+              cy={CENTER}
+              r={RADIUS}
+              fill="none"
+              stroke="black"
+              strokeWidth={STROKE_WIDTH}
+              strokeLinecap="round"
+              strokeDasharray={`${visibleLength} ${gapLength}`}
+              strokeDashoffset={dashOffset}
+            />
+          </Svg>
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -168,9 +172,18 @@ export default function FuryRing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffffff",
+    cursor: "grab",
+    userSelect: "none",
+    touchAction: "none",
+  },
+  movementLayer: {
+    width: SIZE,
+    height: SIZE,
   },
   ringSurface: {
     width: SIZE,
