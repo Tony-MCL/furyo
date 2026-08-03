@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Animated,
-  LayoutChangeEvent,
   PanResponder,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 
@@ -45,6 +45,8 @@ function createRingPath() {
 const ringPath = createRingPath();
 
 export default function FuryRing() {
+  const { height: windowHeight } = useWindowDimensions();
+
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -56,8 +58,9 @@ export default function FuryRing() {
   const ringYRef = useRef(0);
   const dragStartYRef = useRef(0);
   const maxDragDistanceRef = useRef(0);
+  const windowHeightRef = useRef(windowHeight);
 
-  const [containerHeight, setContainerHeight] = useState(0);
+  windowHeightRef.current = windowHeight;
 
   useEffect(() => {
     const animate = (timestamp: number) => {
@@ -90,24 +93,21 @@ export default function FuryRing() {
     directionRef.current *= -1;
   };
 
-  const getVerticalLimit = () => {
-    if (containerHeight <= 0) {
-      return 0;
-    }
-
-    return Math.max(
+  const getVerticalLimit = () =>
+    Math.max(
       0,
-      containerHeight / 2 -
+      windowHeightRef.current / 2 -
         RING_RADIUS -
         RING_STROKE_WIDTH / 2 -
         EDGE_MARGIN,
     );
-  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: () => {
         dragStartYRef.current = ringYRef.current;
         maxDragDistanceRef.current = 0;
@@ -137,6 +137,7 @@ export default function FuryRing() {
       onPanResponderTerminate: () => {
         maxDragDistanceRef.current = 0;
       },
+      onShouldBlockNativeResponder: () => true,
     }),
   ).current;
 
@@ -145,33 +146,35 @@ export default function FuryRing() {
     outputRange: ["0deg", "360deg"],
   });
 
-  const handleLayout = (event: LayoutChangeEvent) => {
-    setContainerHeight(event.nativeEvent.layout.height);
-  };
-
   return (
-    <View
-      style={styles.container}
-      onLayout={handleLayout}
-      {...panResponder.panHandlers}
-    >
+    <View style={styles.container} {...panResponder.panHandlers}>
       <Animated.View
+        pointerEvents="none"
         style={[
-          styles.ringSurface,
+          styles.movementLayer,
           {
-            transform: [{ translateY }, { rotate }],
+            transform: [{ translateY }],
           },
         ]}
       >
-        <Canvas style={styles.canvas}>
-          <Path
-            path={ringPath}
-            color="black"
-            style="stroke"
-            strokeWidth={RING_STROKE_WIDTH}
-            strokeCap="round"
-          />
-        </Canvas>
+        <Animated.View
+          style={[
+            styles.ringSurface,
+            {
+              transform: [{ rotate }],
+            },
+          ]}
+        >
+          <Canvas style={styles.canvas}>
+            <Path
+              path={ringPath}
+              color="black"
+              style="stroke"
+              strokeWidth={RING_STROKE_WIDTH}
+              strokeCap="round"
+            />
+          </Canvas>
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -180,9 +183,15 @@ export default function FuryRing() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffffff",
+  },
+  movementLayer: {
+    width: CANVAS_SIZE,
+    height: CANVAS_SIZE,
   },
   ringSurface: {
     width: CANVAS_SIZE,
