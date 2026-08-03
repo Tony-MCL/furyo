@@ -74,10 +74,12 @@ Current prototype baseline:
 
 - Ring radius: **24 px** in the current web prototype scale
 - Ring stroke: **5 px**
-- Opening: **75°** at game start
-- Starting rotation: **5.2 seconds per full rotation**
+- Opening: **75°**
+- Rotation: **5.2 seconds per full rotation**
 
-These values are gameplay tuning values, not permanent constants.
+Current design direction is to keep both the opening and ring rotation speed constant during a run. Difficulty should come primarily from the incoming objects rather than from making the player's own control object increasingly frantic.
+
+These values remain gameplay tuning values and can still be adjusted after broader playtesting.
 
 ### Controls
 
@@ -108,7 +110,7 @@ A small movement threshold separates taps from drags.
 
 Normal balls are the main gameplay objects.
 
-Planned behavior:
+Behavior:
 
 - spawn from **all four edges** of the screen
 - random spawn position along the selected edge
@@ -119,6 +121,18 @@ Planned behavior:
 Current prototype ball size:
 
 - **12 px diameter**
+
+### Fair-spawn rule
+
+Top and bottom spawns use a **25% center exclusion zone** across the screen width.
+
+This prevents near-center vertical attacks that can create effectively unavoidable situations when the ring itself can only move vertically.
+
+Design principle:
+
+> Fury O may be brutal, but it should not generate situations that feel impossible or unfair.
+
+The player should normally have a meaningful response available: evade the object or deliberately use the opening to eat a normal ball.
 
 ### Bombs
 
@@ -161,7 +175,11 @@ The main objective is **avoidance and survival**, not eating every object.
 
 - Ball touches the solid ring → **Game Over**
 - Ball passes safely without hitting the ring → player survives
-- Ball passes through the opening → ball is eaten and bonus points are awarded
+- Ball passes fully through the opening and enters the inside of the ring → ball is **eaten**
+- An eaten ball is removed immediately and must not continue through the back of the ring
+- Eating a normal ball awards bonus points
+
+The prototype has confirmed that the opening/collision geometry works and that deliberately eating balls is meaningfully more difficult than simply avoiding them.
 
 ### Bomb
 
@@ -205,66 +223,77 @@ Difficulty must **not** be driven by score, because a player who takes bonus ris
 
 ## 8. Difficulty progression
 
-Difficulty is driven primarily by **elapsed time in the current run**.
+Difficulty is driven by **elapsed time in the current run**.
 
 There are no traditional levels or abrupt level changes.
 
-The game should gradually become more chaotic through several independent parameters.
+### Current difficulty philosophy
 
-### Difficulty levers
+The ring itself should remain predictable throughout the run:
 
-1. More simultaneous objects
-2. Shorter average spawn intervals
-3. More varied trajectories / directions
-4. Ring opening gradually closes
-5. Ring rotation gradually speeds up
-6. Bomb probability can increase gradually
+- Opening remains approximately **75°**
+- Rotation remains approximately **5.2 s / revolution**
 
-### Current intended range
+The slow rotation is intentionally part of the challenge. As more balls enter the playfield, the player can often see what is coming but cannot instantly move the opening to any desired angle. Reversing rotation becomes a tactical decision rather than simply reacting to a fast-spinning ring.
+
+Difficulty should therefore be created primarily by the **world around the player**, not by continuously changing the player's control characteristics.
+
+### Primary difficulty levers
+
+1. Increase the number of simultaneous balls gradually
+2. Increase object density / reduce effective gaps between incoming threats
+3. Once approximately **10–12 balls** can be active, begin increasing ball movement speed gradually
+4. Introduce bombs later as an additional recognition/risk element
+5. Bomb probability may increase gradually during long runs
+
+### Intended progression
 
 #### Start
 
 - Opening: **75°**
 - Rotation: **5.2 s / revolution**
-- Low object count
+- Low simultaneous ball count
+- Current prototype baseline allows up to 5 balls while mechanics are being tested
 
-#### Mid-run example
+#### Building pressure
 
-A possible target around an established run:
+The maximum active ball count should rise gradually with elapsed time toward approximately **10–12 simultaneous balls**.
 
-- approximately **10–12 balls/objects active**
-- opening around **70°**
-- rotation around **4.0 s / revolution**
+The exact timing curve must be determined through playtesting. Balls arrive from all four directions, so relatively small increases in object count can create a large increase in cognitive load.
 
-This is only a tuning reference. Actual values must be determined by playtesting because balls arriving from all directions will create substantially more pressure than the original single horizontal test ball.
+#### Higher difficulty
 
-#### High difficulty target
+When the game has reached approximately **10–12 simultaneous balls**, ball travel speed can begin increasing gradually.
 
-Over time the game can trend toward approximately:
+Do not increase ball speed aggressively at the beginning of a run. The early difficulty curve should come mainly from increasing the amount of traffic on screen.
 
-- Opening: **60°**
-- Rotation: **2.5 s / revolution**
-- high simultaneous object density
-
-These should be approached gradually rather than reached through sudden thresholds.
+There is currently **no planned reduction of the 75° opening and no planned increase in ring rotation speed during normal difficulty progression**.
 
 ### Implementation direction
 
-Use elapsed run time to derive a continuous difficulty value.
+Use elapsed run time to derive a continuous difficulty value or time-based parameters.
 
-Example conceptual structure:
+Conceptual structure:
 
 ```ts
 const difficulty = getDifficulty(elapsedSeconds);
 
-const rotationDuration = getRotationDuration(difficulty);
-const gapDegrees = getGapDegrees(difficulty);
 const spawnInterval = getSpawnInterval(difficulty);
 const maxActiveObjects = getMaxActiveObjects(difficulty);
+const ballSpeed = getBallSpeed(difficulty);
 const bombChance = getBombChance(difficulty);
 ```
 
+Ring values can remain constant:
+
+```ts
+const rotationDuration = 5200;
+const gapDegrees = 75;
+```
+
 Prefer interpolation / smooth curves over visible difficulty steps such as "every 10 points".
+
+Difficulty must remain tied to elapsed run time, not score.
 
 ---
 
@@ -347,6 +376,8 @@ Potential events:
 - bomb eaten → explosion
 - new high score
 
+When a normal ball is eaten, a short visual **pop / disappearance / small burst effect** should be evaluated. The ball must disappear inside the ring immediately; it must never travel onward and hit the back of the ring.
+
 Haptics should be evaluated on physical devices.
 
 Do not add audio before the underlying gameplay loop is proven.
@@ -367,36 +398,43 @@ Do not add audio before the underlying gameplay loop is proven.
 - Vertical drag works smoothly
 - Drag and tap separated correctly
 - Ring constrained to screen
-- One horizontal test ball implemented
 - Basic size tuning performed
-- Current ring baseline reduced substantially from original prototype
+- Current ring radius: 24 px
 - Current ball size: 12 px
 - Current opening: 75°
-- Current start rotation: 5.2 s
+- Current rotation: 5.2 s
+- Real random spawn system
+- Balls spawn from all four screen edges
+- Multiple balls coexist
+- Top/bottom 25% center spawn exclusion zone
+- Ring collision detection
+- Solid ring hit triggers Game Over
+- Temporary tap/click-to-restart Game Over test flow
+- Opening correctly allows a normal ball to enter
+- Ball is detected as eaten once fully inside the ring
+- Eaten ball is removed immediately instead of exiting through the back of the ring
 
-### Next prototype task
+### Current prototype baseline
 
-Replace the single looping test ball with a real spawn system.
+During mechanics testing:
 
-First spawn milestone:
+- maximum active balls: **5**
+- spawn interval: approximately **1.1 s**
+- ball travel time: approximately **3.6–5.0 s**
+- opening: **75°**
+- ring rotation: **5.2 s / revolution**
 
-1. Spawn normal balls only.
-2. Select a random screen edge.
-3. Select a random spawn position along that edge.
-4. Give the ball a trajectory across the playfield.
-5. Remove balls after they leave the playfield.
-6. Allow several balls to coexist.
-7. Keep collision disabled initially.
-8. Observe how quickly multiple random trajectories create useful chaos.
+### Next prototype tasks
 
-After spawn behavior feels good:
-
-1. Add ring collision.
-2. Detect pass-through-opening / eaten ball.
-3. Add Game Over.
-4. Add survival timer and scoring.
-5. Add time-based difficulty progression.
-6. Add bombs.
+1. Add time-based difficulty progression for active ball count.
+2. Gradually build from the current low count toward approximately **10–12 simultaneous balls**.
+3. Observe and tune how quickly the playfield becomes difficult while keeping spawns fair.
+4. Once 10–12 balls are established, introduce gradual ball-speed increase.
+5. Add survival timer and scoring.
+6. Add +5 bonus score for eaten normal balls.
+7. Add a small visual feedback effect when a normal ball is eaten.
+8. Add bombs after the normal-ball gameplay loop is stable.
+9. Replace the temporary Game Over overlay with the planned Game Over screen later.
 
 ---
 
@@ -412,8 +450,13 @@ Priorities:
 2. Smooth motion
 3. Readable objects
 4. Fair collision
-5. Gradual difficulty
-6. Fast failure/restart loop
-7. Strong "one more try" feeling
+5. Gradual time-based difficulty
+6. Predictable ring behavior
+7. Fast failure/restart loop
+8. Strong "one more try" feeling
 
 The game succeeds if the player understands it almost immediately but still feels they can improve after every failure.
+
+The intended emotional balance is:
+
+> Difficult enough to provoke laughter, frustration and swearing — but fair enough that the player believes the next attempt can go better.
