@@ -31,7 +31,9 @@ const BALL_RADIUS = BALL_SIZE / 2;
 const BALL_SPAWN_INTERVAL_MS = 1100;
 const BALL_MIN_TRAVEL_MS = 3600;
 const BALL_MAX_TRAVEL_MS = 5000;
-const MAX_BALLS = 5;
+const START_MAX_BALLS = 5;
+const FINAL_MAX_BALLS = 12;
+const BALL_COUNT_STEP_MS = 15000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
 
 const COLLISION_HALF_WIDTH = RING_STROKE_WIDTH / 2 + BALL_RADIUS;
@@ -73,6 +75,11 @@ function normalizeAngle(angle: number) {
 
 function shortestAngleDifference(a: number, b: number) {
   return ((a - b + 540) % 360) - 180;
+}
+
+function getMaxActiveBalls(elapsedMs: number) {
+  const addedBalls = Math.floor(elapsedMs / BALL_COUNT_STEP_MS);
+  return Math.min(START_MAX_BALLS + addedBalls, FINAL_MAX_BALLS);
 }
 
 function getOppositeEdge(edge: Edge): Edge {
@@ -314,6 +321,7 @@ export default function FuryRing() {
   const windowHeightRef = useRef(windowHeight);
   const nextBallIdRef = useRef(1);
   const gameOverRef = useRef(false);
+  const runStartTimeRef = useRef(Date.now());
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -360,8 +368,11 @@ export default function FuryRing() {
         return;
       }
 
+      const elapsedMs = Date.now() - runStartTimeRef.current;
+      const maxActiveBalls = getMaxActiveBalls(elapsedMs);
+
       setBalls((currentBalls) => {
-        if (currentBalls.length >= MAX_BALLS) {
+        if (currentBalls.length >= maxActiveBalls) {
           return currentBalls;
         }
 
@@ -402,6 +413,7 @@ export default function FuryRing() {
   const restartGame = useCallback(() => {
     setBalls([]);
     nextBallIdRef.current = 1;
+    runStartTimeRef.current = Date.now();
     ringYRef.current = 0;
     dragStartYRef.current = 0;
     maxDragDistanceRef.current = 0;
