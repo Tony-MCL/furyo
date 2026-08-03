@@ -607,7 +607,7 @@ export default function FuryRing() {
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
       <Text pointerEvents="none" style={styles.scoreText}>
-        {score}
+        Score: {score}
       </Text>
 
       {balls.map((ball) => (
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   scoreText: {
     position: "absolute",
     top: 24,
-    alignSelf: "center",
+    left: 24,
     zIndex: 5,
     fontSize: 28,
     fontWeight: "800",
