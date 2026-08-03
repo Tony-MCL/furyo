@@ -7,11 +7,11 @@ import React, {
 import {
   Animated,
   Easing,
+  ImageBackground,
   PanResponder,
   Pressable,
   StyleSheet,
   Text,
-  View,
   useWindowDimensions,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
@@ -26,6 +26,11 @@ const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
+
+const RING_COLOR = "#FFB000";
+const BALL_COLOR = "#6FE7FF";
+const TEXT_COLOR = "#F7FAFF";
+const BONUS_COLOR = "#FFD166";
 
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
@@ -590,7 +595,12 @@ export default function FuryRing() {
   });
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <ImageBackground
+      source={{ uri: "/nightsky.png" }}
+      resizeMode="cover"
+      style={styles.container}
+      {...panResponder.panHandlers}
+    >
       <Text pointerEvents="none" style={styles.scoreText}>
         Score: {score}
       </Text>
@@ -629,7 +639,7 @@ export default function FuryRing() {
               cy={CENTER}
               r={RADIUS}
               fill="none"
-              stroke="black"
+              stroke={RING_COLOR}
               strokeWidth={STROKE_WIDTH}
               strokeLinecap="round"
               strokeDasharray={`${visibleLength} ${gapLength}`}
@@ -657,7 +667,7 @@ export default function FuryRing() {
           <Text style={styles.restartText}>Tap to restart</Text>
         </Pressable>
       )}
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -668,7 +678,7 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#02050d",
     cursor: "grab",
     userSelect: "none",
     touchAction: "none",
@@ -681,7 +691,7 @@ const styles = StyleSheet.create({
     zIndex: 5,
     fontSize: 28,
     fontWeight: "800",
-    color: "black",
+    color: TEXT_COLOR,
     fontVariant: ["tabular-nums"],
   },
   ball: {
@@ -693,7 +703,7 @@ const styles = StyleSheet.create({
     marginLeft: -BALL_SIZE / 2,
     marginTop: -BALL_SIZE / 2,
     borderRadius: BALL_SIZE / 2,
-    backgroundColor: "black",
+    backgroundColor: BALL_COLOR,
   },
   movementLayer: {
     width: SIZE,
@@ -714,24 +724,24 @@ const styles = StyleSheet.create({
     lineHeight: SIZE,
     fontSize: 14,
     fontWeight: "900",
-    color: "black",
+    color: BONUS_COLOR,
   },
   gameOverOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.72)",
+    backgroundColor: "rgba(0,0,0,0.62)",
   },
   gameOverText: {
     fontSize: 32,
     fontWeight: "800",
     letterSpacing: 2,
-    color: "black",
+    color: TEXT_COLOR,
   },
   restartText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: "600",
-    color: "black",
+    color: TEXT_COLOR,
   },
 });
