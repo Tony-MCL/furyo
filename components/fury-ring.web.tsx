@@ -39,6 +39,7 @@ const MID_MAX_BALLS = 12;
 const FINAL_MAX_BALLS = 20;
 const BALL_COUNT_STEP_MS = 8000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
+const EATEN_BALL_BONUS = 5;
 
 const COLLISION_HALF_WIDTH = STROKE_WIDTH / 2 + BALL_RADIUS;
 const COLLISION_INNER_RADIUS = RADIUS - COLLISION_HALF_WIDTH;
@@ -323,6 +324,7 @@ export default function FuryRing() {
 
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
+  const bonusFeedback = useRef(new Animated.Value(0)).current;
 
   const angleRef = useRef(0);
   const directionRef = useRef(1);
@@ -339,8 +341,32 @@ export default function FuryRing() {
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [gameOver, setGameOver] = useState(false);
+  const [survivalPoints, setSurvivalPoints] = useState(0);
+  const [bonusPoints, setBonusPoints] = useState(0);
 
   windowHeightRef.current = windowHeight;
+
+  const score = survivalPoints + bonusPoints;
+
+  useEffect(() => {
+    if (gameOver) {
+      return;
+    }
+
+    const updateSurvivalPoints = () => {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - runStartTimeRef.current) / 1000,
+      );
+      setSurvivalPoints(elapsedSeconds);
+    };
+
+    updateSurvivalPoints();
+    const interval = setInterval(updateSurvivalPoints, 200);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [gameOver]);
 
   useEffect(() => {
     const animate = (timestamp: number) => {
@@ -421,6 +447,36 @@ export default function FuryRing() {
     );
   }, []);
 
+  const showBonusFeedback = useCallback(() => {
+    bonusFeedback.stopAnimation();
+    bonusFeedback.setValue(0);
+
+    Animated.sequence([
+      Animated.timing(bonusFeedback, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.delay(220),
+      Animated.timing(bonusFeedback, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [bonusFeedback]);
+
+  const handleEaten = useCallback(
+    (id: number) => {
+      removeBall(id);
+      setBonusPoints((current) => current + EATEN_BALL_BONUS);
+      showBonusFeedback();
+    },
+    [removeBall, showBonusFeedback],
+  );
+
   const handleCollision = useCallback(() => {
     if (gameOverRef.current) {
       return;
@@ -432,6 +488,11 @@ export default function FuryRing() {
 
   const restartGame = useCallback(() => {
     setBalls([]);
+    setSurvivalPoints(0);
+    setBonusPoints(0);
+    bonusFeedback.stopAnimation();
+    bonusFeedback.setValue(0);
+
     nextBallIdRef.current = 1;
     runStartTimeRef.current = Date.now();
     ringYRef.current = 0;
@@ -446,7 +507,7 @@ export default function FuryRing() {
 
     gameOverRef.current = false;
     setGameOver(false);
-  }, [rotation, translateY]);
+  }, [bonusFeedback, rotation, translateY]);
 
   const getRingState = useCallback(
     (): RingState => ({
@@ -523,15 +584,24 @@ export default function FuryRing() {
     outputRange: ["0deg", "360deg"],
   });
 
+  const bonusScale = bonusFeedback.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.65, 1],
+  });
+
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
+      <Text pointerEvents="none" style={styles.scoreText}>
+        {score}
+      </Text>
+
       {balls.map((ball) => (
         <SpawnBall
           key={ball.id}
           ball={ball}
           getRingState={getRingState}
           onCollision={handleCollision}
-          onEaten={removeBall}
+          onEaten={handleEaten}
           onDone={removeBall}
         />
       ))}
@@ -567,6 +637,18 @@ export default function FuryRing() {
             />
           </Svg>
         </Animated.View>
+
+        <Animated.Text
+          style={[
+            styles.bonusText,
+            {
+              opacity: bonusFeedback,
+              transform: [{ scale: bonusScale }],
+            },
+          ]}
+        >
+          +{EATEN_BALL_BONUS}
+        </Animated.Text>
       </Animated.View>
 
       {gameOver && (
@@ -592,6 +674,16 @@ const styles = StyleSheet.create({
     touchAction: "none",
     overflow: "hidden",
   },
+  scoreText: {
+    position: "absolute",
+    top: 24,
+    alignSelf: "center",
+    zIndex: 5,
+    fontSize: 28,
+    fontWeight: "800",
+    color: "black",
+    fontVariant: ["tabular-nums"],
+  },
   ball: {
     position: "absolute",
     left: "50%",
@@ -610,6 +702,19 @@ const styles = StyleSheet.create({
   ringSurface: {
     width: SIZE,
     height: SIZE,
+  },
+  bonusText: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: SIZE,
+    height: SIZE,
+    textAlign: "center",
+    textAlignVertical: "center",
+    lineHeight: SIZE,
+    fontSize: 14,
+    fontWeight: "900",
+    color: "black",
   },
   gameOverOverlay: {
     ...StyleSheet.absoluteFillObject,
