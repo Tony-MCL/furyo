@@ -9,13 +9,13 @@ import {
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
-const SIZE = 320;
+const SIZE = 280;
 const CENTER = SIZE / 2;
-const RADIUS = 100;
+const RADIUS = 85;
 const STROKE_WIDTH = 18;
 
 const GAP_DEGREES = 60;
-const ROTATION_DURATION_MS = 4000;
+const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
