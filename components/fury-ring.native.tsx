@@ -9,10 +9,10 @@ import {
 } from "react-native";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 
-const CANVAS_SIZE = 196;
+const CANVAS_SIZE = 157;
 const RING_CENTER = CANVAS_SIZE / 2;
-const RING_RADIUS = 60;
-const RING_STROKE_WIDTH = 13;
+const RING_RADIUS = 48;
+const RING_STROKE_WIDTH = 10;
 const GAP_SIZE_DEGREES = 60;
 const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
