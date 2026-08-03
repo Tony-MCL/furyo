@@ -29,6 +29,7 @@ const BALL_SPAWN_INTERVAL_MS = 1100;
 const BALL_MIN_TRAVEL_MS = 3600;
 const BALL_MAX_TRAVEL_MS = 5000;
 const MAX_BALLS = 5;
+const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
 
 type Edge = "top" | "right" | "bottom" | "left";
 
@@ -67,7 +68,23 @@ function getRandomEdge(): Edge {
   return edges[Math.floor(Math.random() * edges.length)];
 }
 
-function getPointOnEdge(edge: Edge, width: number, height: number) {
+function getRandomVerticalSpawnX(width: number) {
+  const halfWidth = width / 2;
+  const excludedHalfWidth =
+    (width * TOP_BOTTOM_CENTER_EXCLUSION_RATIO) / 2;
+  const spawnOnLeft = Math.random() < 0.5;
+
+  return spawnOnLeft
+    ? randomBetween(-halfWidth, -excludedHalfWidth)
+    : randomBetween(excludedHalfWidth, halfWidth);
+}
+
+function getPointOnEdge(
+  edge: Edge,
+  width: number,
+  height: number,
+  isSpawnPoint = false,
+) {
   const halfWidth = width / 2;
   const halfHeight = height / 2;
   const outside = BALL_SIZE * 2;
@@ -75,7 +92,9 @@ function getPointOnEdge(edge: Edge, width: number, height: number) {
   switch (edge) {
     case "top":
       return {
-        x: randomBetween(-halfWidth, halfWidth),
+        x: isSpawnPoint
+          ? getRandomVerticalSpawnX(width)
+          : randomBetween(-halfWidth, halfWidth),
         y: -halfHeight - outside,
       };
     case "right":
@@ -85,7 +104,9 @@ function getPointOnEdge(edge: Edge, width: number, height: number) {
       };
     case "bottom":
       return {
-        x: randomBetween(-halfWidth, halfWidth),
+        x: isSpawnPoint
+          ? getRandomVerticalSpawnX(width)
+          : randomBetween(-halfWidth, halfWidth),
         y: halfHeight + outside,
       };
     case "left":
@@ -99,7 +120,7 @@ function getPointOnEdge(edge: Edge, width: number, height: number) {
 function createBall(id: number, width: number, height: number): BallData {
   const startEdge = getRandomEdge();
   const endEdge = getOppositeEdge(startEdge);
-  const start = getPointOnEdge(startEdge, width, height);
+  const start = getPointOnEdge(startEdge, width, height, true);
   const end = getPointOnEdge(endEdge, width, height);
 
   return {
