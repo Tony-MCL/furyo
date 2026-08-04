@@ -8,13 +8,24 @@ import {
   View,
 } from "react-native";
 import FuryRing from "../components/fury-ring";
+import {
+  FURY_DIFFICULTIES,
+  FURY_DIFFICULTY_ORDER,
+  type FuryDifficulty,
+} from "../components/fury-difficulty";
 
 export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
 
   if (isPlaying) {
-    return <FuryRing onHome={() => setIsPlaying(false)} />;
+    return (
+      <FuryRing
+        difficulty={difficulty}
+        onHome={() => setIsPlaying(false)}
+      />
+    );
   }
 
   if (showInfo) {
@@ -84,6 +95,34 @@ export default function Page() {
           style={styles.logo}
         />
 
+        <Text style={styles.difficultyLabel}>VANSKELIGHETSGRAD</Text>
+
+        <View style={styles.difficultyRow}>
+          {FURY_DIFFICULTY_ORDER.map((option) => {
+            const selected = option === difficulty;
+
+            return (
+              <Pressable
+                key={option}
+                style={[
+                  styles.difficultyButton,
+                  selected && styles.difficultyButtonSelected,
+                ]}
+                onPress={() => setDifficulty(option)}
+              >
+                <Text
+                  style={[
+                    styles.difficultyButtonText,
+                    selected && styles.difficultyButtonTextSelected,
+                  ]}
+                >
+                  {FURY_DIFFICULTIES[option].label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Pressable style={styles.primaryButton} onPress={() => setIsPlaying(true)}>
           <Text style={styles.primaryButtonText}>START SPILL</Text>
         </Pressable>
@@ -106,13 +145,52 @@ const styles = StyleSheet.create({
   content: {
     width: "100%",
     alignItems: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
   logo: {
     width: "78%",
     maxWidth: 420,
     aspectRatio: 1.16,
-    marginBottom: 34,
+    marginBottom: 24,
+  },
+  difficultyLabel: {
+    color: "rgba(247,250,255,0.72)",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.6,
+    marginBottom: 10,
+  },
+  difficultyRow: {
+    width: "100%",
+    maxWidth: 430,
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 24,
+  },
+  difficultyButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(111,231,255,0.45)",
+    backgroundColor: "rgba(2,5,13,0.5)",
+    paddingHorizontal: 6,
+  },
+  difficultyButtonSelected: {
+    borderColor: "#FFB000",
+    backgroundColor: "rgba(255,176,0,0.13)",
+  },
+  difficultyButtonText: {
+    color: "rgba(247,250,255,0.76)",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
+  difficultyButtonTextSelected: {
+    color: "#FFB000",
   },
   primaryButton: {
     width: "78%",
