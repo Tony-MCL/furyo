@@ -14,6 +14,10 @@ import {
   FURY_DIFFICULTY_ORDER,
   type FuryDifficulty,
 } from "../components/fury-difficulty";
+import {
+  preloadRewardedRevive,
+  showRewardedRevive,
+} from "../components/rewarded-revive";
 
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const MAX_REVIVES = 3;
@@ -23,6 +27,8 @@ export default function Page() {
   const [showInfo, setShowInfo] = useState(false);
   const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
   const [revives, setRevives] = useState(0);
+  const [earningRevive, setEarningRevive] = useState(false);
+  const [reviveMessage, setReviveMessage] = useState("");
 
   const loadRevives = useCallback(async () => {
     try {
@@ -44,17 +50,38 @@ export default function Page() {
 
   useEffect(() => {
     loadRevives();
+    void preloadRewardedRevive();
   }, [loadRevives]);
 
-  const earnTestRevive = useCallback(() => {
-    setRevives((current) => {
-      const next = Math.min(MAX_REVIVES, current + 1);
-      AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(next)).catch(() => {
-        // Keep the UI responsive even if storage is unavailable.
+  const earnRevive = useCallback(async () => {
+    if (earningRevive || revives >= MAX_REVIVES) {
+      return;
+    }
+
+    setEarningRevive(true);
+    setReviveMessage("");
+
+    try {
+      const earned = await showRewardedRevive();
+      if (!earned) {
+        setReviveMessage("Ingen Revive opptjent");
+        return;
+      }
+
+      setRevives((current) => {
+        const next = Math.min(MAX_REVIVES, current + 1);
+        AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(next)).catch(() => {
+          // Keep the UI responsive even if storage is unavailable.
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+      setReviveMessage("+1 REVIVE");
+    } catch {
+      setReviveMessage("Annonsen er ikke klar. Prøv igjen.");
+    } finally {
+      setEarningRevive(false);
+    }
+  }, [earningRevive, revives]);
 
   if (isPlaying) {
     return (
@@ -119,6 +146,7 @@ export default function Page() {
   }
 
   const reviveFull = revives >= MAX_REVIVES;
+  const earnDisabled = reviveFull || earningRevive;
 
   return (
     <ImageBackground
@@ -140,23 +168,32 @@ export default function Page() {
         <View style={styles.revivePanel}>
           <Text style={styles.reviveCount}>REVIVES {revives}/{MAX_REVIVES}</Text>
           <Pressable
-            disabled={reviveFull}
+            disabled={earnDisabled}
             style={[
               styles.earnReviveButton,
-              reviveFull && styles.earnReviveButtonDisabled,
+              earnDisabled && styles.earnReviveButtonDisabled,
             ]}
-            onPress={earnTestRevive}
+            onPress={earnRevive}
           >
             <Text
               style={[
                 styles.earnReviveButtonText,
-                reviveFull && styles.earnReviveButtonTextDisabled,
+                earnDisabled && styles.earnReviveButtonTextDisabled,
               ]}
             >
-              {reviveFull ? "REVIVES FULL" : "EARN REVIVE"}
+              {reviveFull
+                ? "REVIVES FULL"
+                : earningRevive
+                  ? "LOADING AD..."
+                  : "EARN REVIVE"}
             </Text>
           </Pressable>
-          <Text style={styles.reviveHint}>Rewarded ad kobles på senere</Text>
+          <Text style={styles.reviveHint}>
+            Se en belønnet annonse for å tjene +1 Revive
+          </Text>
+          {!!reviveMessage && (
+            <Text style={styles.reviveMessage}>{reviveMessage}</Text>
+          )}
         </View>
 
         <Text style={styles.difficultyLabel}>VANSKELIGHETSGRAD</Text>
@@ -258,6 +295,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: "rgba(247,250,255,0.45)",
     fontSize: 10,
+    textAlign: "center",
+  },
+  reviveMessage: {
+    marginTop: 5,
+    color: "#FFD166",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   difficultyLabel: {
     color: "rgba(247,250,255,0.72)",
