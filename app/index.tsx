@@ -11,9 +11,60 @@ import FuryRing from "../components/fury-ring";
 
 export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   if (isPlaying) {
     return <FuryRing onHome={() => setIsPlaying(false)} />;
+  }
+
+  if (showInfo) {
+    return (
+      <ImageBackground
+        source={{ uri: "/nightsky.png" }}
+        resizeMode="cover"
+        style={styles.container}
+      >
+        <Pressable style={styles.backButton} onPress={() => setShowInfo(false)}>
+          <Text style={styles.backButtonText}>‹</Text>
+        </Pressable>
+
+        <View style={styles.infoContent}>
+          <Image
+            source={{ uri: "/fury-logo.svg" }}
+            resizeMode="contain"
+            style={styles.infoLogo}
+          />
+
+          <Text style={styles.infoTitle}>INFO</Text>
+
+          <Text style={styles.infoText}>
+            Flytt ringen. Kontroller åpningen. Overlev så lenge du kan.
+          </Text>
+          <Text style={styles.infoText}>
+            Dra opp og ned for å flytte ringen, og trykk for å snu
+            rotasjonsretningen.
+          </Text>
+          <Text style={styles.infoText}>
+            Spis vanlige baller gjennom åpningen for bonuspoeng — men ikke bli
+            for grådig.
+          </Text>
+
+          <View style={styles.infoLinks}>
+            <Pressable style={styles.infoLinkButton}>
+              <Text style={styles.infoLinkText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable style={styles.infoLinkButton}>
+              <Text style={styles.infoLinkText}>Terms of Use</Text>
+            </Pressable>
+            <Pressable style={styles.infoLinkButton}>
+              <Text style={styles.infoLinkText}>Contact</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={styles.footer}>© 2026 Morning Coffee Labs</Text>
+      </ImageBackground>
+    );
   }
 
   return (
@@ -22,7 +73,7 @@ export default function Page() {
       resizeMode="cover"
       style={styles.container}
     >
-      <Pressable style={styles.infoButton}>
+      <Pressable style={styles.infoButton} onPress={() => setShowInfo(true)}>
         <Text style={styles.infoButtonText}>i</Text>
       </Pressable>
 
@@ -97,6 +148,72 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     lineHeight: 24,
+  },
+  backButton: {
+    position: "absolute",
+    top: 38,
+    left: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "#6FE7FF",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  backButtonText: {
+    color: "#F7FAFF",
+    fontSize: 38,
+    fontWeight: "500",
+    lineHeight: 39,
+    marginTop: -3,
+  },
+  infoContent: {
+    width: "100%",
+    maxWidth: 520,
+    alignItems: "center",
+    paddingHorizontal: 34,
+  },
+  infoLogo: {
+    width: "42%",
+    maxWidth: 190,
+    aspectRatio: 1.16,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    color: "#FFB000",
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 2,
+    marginBottom: 26,
+  },
+  infoText: {
+    width: "100%",
+    color: "#F7FAFF",
+    fontSize: 16,
+    lineHeight: 23,
+    textAlign: "center",
+    marginBottom: 13,
+  },
+  infoLinks: {
+    width: "100%",
+    marginTop: 24,
+    alignItems: "center",
+  },
+  infoLinkButton: {
+    width: "82%",
+    maxWidth: 300,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(111,231,255,0.35)",
+  },
+  infoLinkText: {
+    color: "#6FE7FF",
+    fontSize: 16,
+    fontWeight: "700",
   },
   footer: {
     position: "absolute",
