@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import FuryRing from "../components/fury-ring";
 import {
   FURY_DIFFICULTIES,
@@ -14,16 +15,55 @@ import {
   type FuryDifficulty,
 } from "../components/fury-difficulty";
 
+const REVIVE_STORAGE_KEY = "fury-o-revives";
+const MAX_REVIVES = 3;
+
 export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
+  const [revives, setRevives] = useState(0);
+
+  const loadRevives = useCallback(async () => {
+    try {
+      const storedValue = await AsyncStorage.getItem(REVIVE_STORAGE_KEY);
+      if (storedValue === null) {
+        return;
+      }
+
+      const parsed = Number.parseInt(storedValue, 10);
+      if (!Number.isFinite(parsed)) {
+        return;
+      }
+
+      setRevives(Math.min(MAX_REVIVES, Math.max(0, parsed)));
+    } catch {
+      // Revive persistence should never block the Home screen.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRevives();
+  }, [loadRevives]);
+
+  const earnTestRevive = useCallback(() => {
+    setRevives((current) => {
+      const next = Math.min(MAX_REVIVES, current + 1);
+      AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(next)).catch(() => {
+        // Keep the UI responsive even if storage is unavailable.
+      });
+      return next;
+    });
+  }, []);
 
   if (isPlaying) {
     return (
       <FuryRing
         difficulty={difficulty}
-        onHome={() => setIsPlaying(false)}
+        onHome={() => {
+          setIsPlaying(false);
+          void loadRevives();
+        }}
       />
     );
   }
@@ -78,6 +118,8 @@ export default function Page() {
     );
   }
 
+  const reviveFull = revives >= MAX_REVIVES;
+
   return (
     <ImageBackground
       source={{ uri: "/nightsky.png" }}
@@ -94,6 +136,28 @@ export default function Page() {
           resizeMode="contain"
           style={styles.logo}
         />
+
+        <View style={styles.revivePanel}>
+          <Text style={styles.reviveCount}>REVIVES {revives}/{MAX_REVIVES}</Text>
+          <Pressable
+            disabled={reviveFull}
+            style={[
+              styles.earnReviveButton,
+              reviveFull && styles.earnReviveButtonDisabled,
+            ]}
+            onPress={earnTestRevive}
+          >
+            <Text
+              style={[
+                styles.earnReviveButtonText,
+                reviveFull && styles.earnReviveButtonTextDisabled,
+              ]}
+            >
+              {reviveFull ? "REVIVES FULL" : "EARN REVIVE"}
+            </Text>
+          </Pressable>
+          <Text style={styles.reviveHint}>Rewarded ad kobles på senere</Text>
+        </View>
 
         <Text style={styles.difficultyLabel}>VANSKELIGHETSGRAD</Text>
 
@@ -148,10 +212,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logo: {
-    width: "78%",
-    maxWidth: 420,
+    width: "72%",
+    maxWidth: 390,
     aspectRatio: 1.16,
-    marginBottom: 24,
+    marginBottom: 14,
+  },
+  revivePanel: {
+    width: "78%",
+    maxWidth: 320,
+    alignItems: "center",
+    marginBottom: 22,
+  },
+  reviveCount: {
+    color: "#FFD166",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  earnReviveButton: {
+    width: "100%",
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#6FE7FF",
+    backgroundColor: "rgba(111,231,255,0.08)",
+    paddingHorizontal: 16,
+  },
+  earnReviveButtonDisabled: {
+    borderColor: "rgba(247,250,255,0.2)",
+    backgroundColor: "rgba(247,250,255,0.04)",
+  },
+  earnReviveButtonText: {
+    color: "#6FE7FF",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  earnReviveButtonTextDisabled: {
+    color: "rgba(247,250,255,0.4)",
+  },
+  reviveHint: {
+    marginTop: 6,
+    color: "rgba(247,250,255,0.45)",
+    fontSize: 10,
   },
   difficultyLabel: {
     color: "rgba(247,250,255,0.72)",
