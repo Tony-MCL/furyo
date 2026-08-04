@@ -700,12 +700,6 @@ export default function FuryRing({ onHome }: FuryRingProps) {
           <Pressable style={styles.homeButton} onPress={onHome}>
             <Text style={styles.homeButtonText}>HJEM</Text>
           </Pressable>
-
-          <Image
-            source={{ uri: "/fury-logo.svg" }}
-            resizeMode="contain"
-            style={styles.gameOverBrandLogo}
-          />
         </View>
       )}
     </ImageBackground>
@@ -796,10 +790,10 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   gameOverArtwork: {
-    width: "82%",
-    maxWidth: 440,
+    width: "100%",
+    maxWidth: 520,
     aspectRatio: 459.75 / 90,
-    marginTop: 92,
+    marginTop: 80,
     marginBottom: 64,
   },
   playAgainButton: {
@@ -834,11 +828,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 1,
-  },
-  gameOverBrandLogo: {
-    position: "absolute",
-    bottom: 34,
-    width: 92,
-    height: 92,
   },
 });
