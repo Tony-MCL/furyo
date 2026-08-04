@@ -18,6 +18,10 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
+import {
+  FURY_DIFFICULTIES,
+  type FuryDifficulty,
+} from "./fury-difficulty";
 
 const CANVAS_SIZE = 79;
 const RING_CENTER = CANVAS_SIZE / 2;
@@ -36,18 +40,9 @@ const BONUS_COLOR = "#FFD166";
 
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
-const BALL_SPAWN_INTERVAL_START_MS = 1100;
-const BALL_SPAWN_INTERVAL_AT_12_MS = 350;
-const BALL_SPAWN_INTERVAL_FINAL_MS = 200;
-const BALL_MIN_TRAVEL_MS = 3600;
-const BALL_MAX_TRAVEL_MS = 5000;
-const START_MAX_BALLS = 5;
-const MID_MAX_BALLS = 12;
-const FINAL_MAX_BALLS = 20;
-const BALL_COUNT_STEP_MS = 8000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
 const EATEN_BALL_BONUS = 5;
-const HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
+const LEGACY_HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
 
 const COLLISION_HALF_WIDTH = RING_STROKE_WIDTH / 2 + BALL_RADIUS;
 const COLLISION_INNER_RADIUS = RING_RADIUS - COLLISION_HALF_WIDTH;
@@ -57,9 +52,14 @@ const BALL_ANGULAR_CLEARANCE_DEGREES =
 const SAFE_GAP_HALF_DEGREES =
   GAP_SIZE_DEGREES / 2 - BALL_ANGULAR_CLEARANCE_DEGREES;
 
-let sessionHighScore = 0;
+const sessionHighScores: Record<FuryDifficulty, number> = {
+  normal: 0,
+  fury: 0,
+  "extreme-fury": 0,
+};
 
 type FuryRingProps = {
+  difficulty: FuryDifficulty;
   onHome?: () => void;
 };
 
@@ -96,34 +96,38 @@ function shortestAngleDifference(a: number, b: number) {
   return ((a - b + 540) % 360) - 180;
 }
 
-function getMaxActiveBalls(elapsedMs: number) {
-  const addedBalls = Math.floor(elapsedMs / BALL_COUNT_STEP_MS);
-  return Math.min(START_MAX_BALLS + addedBalls, FINAL_MAX_BALLS);
+function getHighScoreStorageKey(difficulty: FuryDifficulty) {
+  return `fury-o-high-score-${difficulty}`;
 }
 
-function getSpawnInterval(elapsedMs: number) {
-  const maxActiveBalls = getMaxActiveBalls(elapsedMs);
+function getMaxActiveBalls(elapsedMs: number, difficulty: FuryDifficulty) {
+  const config = FURY_DIFFICULTIES[difficulty];
+  const addedBalls = Math.floor(elapsedMs / config.ballCountStepMs);
+  return Math.min(config.startMaxBalls + addedBalls, config.finalMaxBalls);
+}
 
-  if (maxActiveBalls <= MID_MAX_BALLS) {
+function getSpawnInterval(elapsedMs: number, difficulty: FuryDifficulty) {
+  const config = FURY_DIFFICULTIES[difficulty];
+  const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
+
+  if (maxActiveBalls <= config.midMaxBalls) {
     const progress =
-      (maxActiveBalls - START_MAX_BALLS) /
-      (MID_MAX_BALLS - START_MAX_BALLS);
+      (maxActiveBalls - config.startMaxBalls) /
+      (config.midMaxBalls - config.startMaxBalls);
 
     return Math.round(
-      BALL_SPAWN_INTERVAL_START_MS +
-        (BALL_SPAWN_INTERVAL_AT_12_MS - BALL_SPAWN_INTERVAL_START_MS) *
-          progress,
+      config.spawnIntervalStartMs +
+        (config.spawnIntervalMidMs - config.spawnIntervalStartMs) * progress,
     );
   }
 
   const progress =
-    (maxActiveBalls - MID_MAX_BALLS) /
-    (FINAL_MAX_BALLS - MID_MAX_BALLS);
+    (maxActiveBalls - config.midMaxBalls) /
+    (config.finalMaxBalls - config.midMaxBalls);
 
   return Math.round(
-    BALL_SPAWN_INTERVAL_AT_12_MS +
-      (BALL_SPAWN_INTERVAL_FINAL_MS - BALL_SPAWN_INTERVAL_AT_12_MS) *
-        progress,
+    config.spawnIntervalMidMs +
+      (config.spawnIntervalFinalMs - config.spawnIntervalMidMs) * progress,
   );
 }
 
@@ -194,7 +198,13 @@ function getPointOnEdge(
   }
 }
 
-function createBall(id: number, width: number, height: number): BallData {
+function createBall(
+  id: number,
+  width: number,
+  height: number,
+  difficulty: FuryDifficulty,
+): BallData {
+  const config = FURY_DIFFICULTIES[difficulty];
   const startEdge = getRandomEdge();
   const endEdge = getOppositeEdge(startEdge);
   const start = getPointOnEdge(startEdge, width, height, true);
@@ -206,7 +216,7 @@ function createBall(id: number, width: number, height: number): BallData {
     startY: start.y,
     endX: end.x,
     endY: end.y,
-    duration: randomBetween(BALL_MIN_TRAVEL_MS, BALL_MAX_TRAVEL_MS),
+    duration: randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs),
   };
 }
 
@@ -344,8 +354,9 @@ function createRingPath() {
 
 const ringPath = createRingPath();
 
-export default function FuryRing({ onHome }: FuryRingProps) {
+export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const difficultyConfig = FURY_DIFFICULTIES[difficulty];
 
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
@@ -370,7 +381,7 @@ export default function FuryRing({ onHome }: FuryRingProps) {
   const [survivalPoints, setSurvivalPoints] = useState(0);
   const [bonusPoints, setBonusPoints] = useState(0);
   const [finalScore, setFinalScore] = useState(0);
-  const [highScore, setHighScore] = useState(sessionHighScore);
+  const [highScore, setHighScore] = useState(sessionHighScores[difficulty]);
 
   windowHeightRef.current = windowHeight;
 
@@ -382,7 +393,16 @@ export default function FuryRing({ onHome }: FuryRingProps) {
 
     const loadHighScore = async () => {
       try {
-        const storedValue = await AsyncStorage.getItem(HIGH_SCORE_STORAGE_KEY);
+        const storageKey = getHighScoreStorageKey(difficulty);
+        let storedValue = await AsyncStorage.getItem(storageKey);
+
+        if (storedValue === null && difficulty === "normal") {
+          storedValue = await AsyncStorage.getItem(LEGACY_HIGH_SCORE_STORAGE_KEY);
+          if (storedValue !== null) {
+            await AsyncStorage.setItem(storageKey, storedValue);
+          }
+        }
+
         if (storedValue === null || cancelled) {
           return;
         }
@@ -392,8 +412,11 @@ export default function FuryRing({ onHome }: FuryRingProps) {
           return;
         }
 
-        sessionHighScore = Math.max(sessionHighScore, storedHighScore);
-        setHighScore(sessionHighScore);
+        sessionHighScores[difficulty] = Math.max(
+          sessionHighScores[difficulty],
+          storedHighScore,
+        );
+        setHighScore(sessionHighScores[difficulty]);
       } catch {
         // High score persistence should never block gameplay.
       }
@@ -404,7 +427,7 @@ export default function FuryRing({ onHome }: FuryRingProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [difficulty]);
 
   useEffect(() => {
     if (gameOver) {
@@ -469,8 +492,8 @@ export default function FuryRing({ onHome }: FuryRingProps) {
       }
 
       const elapsedMs = Date.now() - runStartTimeRef.current;
-      const maxActiveBalls = getMaxActiveBalls(elapsedMs);
-      const spawnInterval = getSpawnInterval(elapsedMs);
+      const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
+      const spawnInterval = getSpawnInterval(elapsedMs, difficulty);
 
       setBalls((currentBalls) => {
         if (currentBalls.length >= maxActiveBalls) {
@@ -481,6 +504,7 @@ export default function FuryRing({ onHome }: FuryRingProps) {
           nextBallIdRef.current,
           windowWidth,
           windowHeight,
+          difficulty,
         );
         nextBallIdRef.current += 1;
 
@@ -497,7 +521,7 @@ export default function FuryRing({ onHome }: FuryRingProps) {
         clearTimeout(timeoutId);
       }
     };
-  }, [gameOver, windowHeight, windowWidth]);
+  }, [difficulty, gameOver, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) =>
@@ -541,15 +565,15 @@ export default function FuryRing({ onHome }: FuryRingProps) {
     }
 
     const currentScore = scoreRef.current;
-    const previousHighScore = sessionHighScore;
-    sessionHighScore = Math.max(sessionHighScore, currentScore);
+    const previousHighScore = sessionHighScores[difficulty];
+    sessionHighScores[difficulty] = Math.max(previousHighScore, currentScore);
     setFinalScore(currentScore);
-    setHighScore(sessionHighScore);
+    setHighScore(sessionHighScores[difficulty]);
 
-    if (sessionHighScore > previousHighScore) {
+    if (sessionHighScores[difficulty] > previousHighScore) {
       AsyncStorage.setItem(
-        HIGH_SCORE_STORAGE_KEY,
-        String(sessionHighScore),
+        getHighScoreStorageKey(difficulty),
+        String(sessionHighScores[difficulty]),
       ).catch(() => {
         // Keep the game responsive even if storage is unavailable.
       });
@@ -557,7 +581,7 @@ export default function FuryRing({ onHome }: FuryRingProps) {
 
     gameOverRef.current = true;
     setGameOver(true);
-  }, []);
+  }, [difficulty]);
 
   const restartGame = useCallback(() => {
     setBalls([]);
@@ -671,9 +695,14 @@ export default function FuryRing({ onHome }: FuryRingProps) {
       {...panResponder.panHandlers}
     >
       {!gameOver && (
-        <Text pointerEvents="none" style={styles.scoreText}>
-          Score: {score}
-        </Text>
+        <>
+          <Text pointerEvents="none" style={styles.scoreText}>
+            Score: {score}
+          </Text>
+          <Text pointerEvents="none" style={styles.difficultyText}>
+            {difficultyConfig.label}
+          </Text>
+        </>
       )}
 
       {balls.map((ball) => (
@@ -773,6 +802,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: TEXT_COLOR,
     fontVariant: ["tabular-nums"],
+  },
+  difficultyText: {
+    position: "absolute",
+    top: 58,
+    left: 25,
+    zIndex: 5,
+    color: "rgba(111,231,255,0.76)",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.1,
   },
   ball: {
     position: "absolute",
