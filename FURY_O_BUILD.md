@@ -221,11 +221,30 @@ Difficulty must **not** be driven by score, because a player who takes bonus ris
 
 ---
 
-## 8. Difficulty progression
+## 8. Difficulty modes and progression
 
-Difficulty is driven by **elapsed time in the current run**.
+Fury O will have **three selectable difficulty modes**:
 
-There are no traditional levels or abrupt level changes.
+1. **Normal**
+2. **Fury**
+3. **Extreme Fury**
+
+### Unlock progression
+
+- **Normal** is available from the beginning.
+- **Fury** is locked until the player reaches a required High Score in Normal.
+- **Extreme Fury** is locked until the player reaches a required High Score in Fury.
+- The exact unlock score thresholds are **not yet fixed** and must be balanced through playtesting.
+
+Each difficulty mode should have its **own local persistent High Score** so that progression and records remain easy to understand.
+
+Unlocks are local to the device. No account, backend or cloud progression is required.
+
+### Difficulty within a run
+
+Within each mode, difficulty is still driven by **elapsed time in the current run**, not by score.
+
+There are no abrupt traditional levels during gameplay.
 
 ### Current difficulty philosophy
 
@@ -242,62 +261,138 @@ Difficulty should therefore be created primarily by the **world around the playe
 
 1. Increase the number of simultaneous balls gradually
 2. Increase object density / reduce effective gaps between incoming threats
-3. Once approximately **10–12 balls** can be active, begin increasing ball movement speed gradually
-4. Introduce bombs later as an additional recognition/risk element
-5. Bomb probability may increase gradually during long runs
+3. Adjust starting density and progression curves between Normal, Fury and Extreme Fury
+4. Introduce bombs as an additional recognition/risk element
+5. Bomb probability may increase with difficulty and elapsed run time
 
-### Intended progression
+### Current Normal baseline
 
-#### Start
+Current gameplay implementation uses:
 
 - Opening: **75°**
 - Rotation: **5.2 s / revolution**
-- Low simultaneous ball count
-- Current prototype baseline allows up to 5 balls while mechanics are being tested
+- Maximum active balls starts at **5**
+- Maximum active balls increases by **1 every 8 seconds**
+- Maximum active balls is capped at **20**
+- Spawn interval begins around **1100 ms**
+- Spawn interval reaches approximately **350 ms** around 12 active balls
+- Spawn interval reaches approximately **200 ms** at the final cap
+- Ball travel time remains random at approximately **3.6–5.0 seconds**
 
-#### Building pressure
+Travel speed is currently kept constant rather than increasing during the run. Do not change this until testing demonstrates a need.
 
-The maximum active ball count should rise gradually with elapsed time toward approximately **10–12 simultaneous balls**.
+### Fury and Extreme Fury
 
-The exact timing curve must be determined through playtesting. Balls arrive from all four directions, so relatively small increases in object count can create a large increase in cognitive load.
+Exact differences are deliberately left open until Normal has been tested on physical devices and with outside testers.
 
-#### Higher difficulty
+Likely tuning parameters include:
 
-When the game has reached approximately **10–12 simultaneous balls**, ball travel speed can begin increasing gradually.
+- higher starting active-ball count
+- shorter starting spawn interval
+- faster density progression
+- different bomb probability / introduction timing
 
-Do not increase ball speed aggressively at the beginning of a run. The early difficulty curve should come mainly from increasing the amount of traffic on screen.
+The three modes must feel clearly different, but the underlying controls and rules remain identical.
 
-There is currently **no planned reduction of the 75° opening and no planned increase in ring rotation speed during normal difficulty progression**.
+Difficulty mode must never become an excuse for unfair collision or mathematically unavoidable spawning.
 
 ### Implementation direction
 
-Use elapsed run time to derive a continuous difficulty value or time-based parameters.
+Difficulty should be modeled from both the selected mode and elapsed time.
 
 Conceptual structure:
 
 ```ts
-const difficulty = getDifficulty(elapsedSeconds);
+const difficulty = getDifficulty(mode, elapsedSeconds);
 
 const spawnInterval = getSpawnInterval(difficulty);
 const maxActiveObjects = getMaxActiveObjects(difficulty);
-const ballSpeed = getBallSpeed(difficulty);
 const bombChance = getBombChance(difficulty);
 ```
 
-Ring values can remain constant:
+Ring values can remain constant unless later testing gives a strong reason to change them:
 
 ```ts
 const rotationDuration = 5200;
 const gapDegrees = 75;
 ```
 
-Prefer interpolation / smooth curves over visible difficulty steps such as "every 10 points".
-
-Difficulty must remain tied to elapsed run time, not score.
+Prefer interpolation / smooth curves over visible difficulty steps tied to score.
 
 ---
 
-## 9. Screens
+## 9. Revive bonus and rewarded ads
+
+Fury O will include a limited **Revive** bonus.
+
+The Revive is intentionally **not** a purchasable item and is not part of a virtual currency system.
+
+### How Revives are earned
+
+- A player earns **1 Revive by voluntarily watching 1 rewarded advertising video**.
+- Revives cannot be bought with money.
+- Revives cannot be earned through gameplay score.
+- There is **no daily earning limit**.
+
+The advertising video should be watched **before gameplay**, not after a death as an interruption to the run.
+
+This keeps the actual gameplay loop fast and avoids forcing the player into an ad at the moment of failure.
+
+### Revive inventory
+
+- Maximum stored Revives: **3**
+- Revives persist locally between app sessions.
+- Unused Revives do not expire.
+- There is no daily reset and no rollover logic because stored Revives simply remain until used.
+- If the inventory is **3/3**, the player cannot earn another Revive.
+- After a Revive is used, the player may voluntarily watch another rewarded video to refill the empty slot.
+
+A player may therefore watch as many rewarded ads over time as they choose, but can never stockpile more than three Revives at once.
+
+### Revive use during a run
+
+Hard rule:
+
+> **Maximum one Revive may be used in a single run.**
+
+A Revive is an extra chance, not a way to repeatedly buy survival during one record attempt.
+
+The preferred interaction is to let the player decide **before starting the run** whether a stored Revive should be armed for that run.
+
+If armed:
+
+- the Revive is not consumed merely by starting the game
+- the first otherwise-fatal collision can trigger the Revive immediately
+- the Revive is consumed only if it actually saves the player
+- the run continues with the same score and elapsed difficulty progression
+- a second fatal collision in the same run gives normal Game Over
+
+If the player finishes the run without needing the armed Revive, it remains in inventory.
+
+### Revive recovery behavior
+
+Exact visual/gameplay recovery behavior must be tuned during implementation.
+
+Current preferred direction:
+
+- remove or neutralize the object that caused the fatal collision
+- give the ring a very short visual protection / recovery window so another object cannot kill the player in the same instant
+- continue the same run immediately
+- do not reset score, timer, object-density progression or selected difficulty
+
+The protection window must be brief enough that Revive remains a second chance rather than temporary invulnerability.
+
+### Advertising philosophy
+
+Rewarded ads are **voluntary**.
+
+Fury O should not force a rewarded video between rounds or use advertising as a mandatory continuation gate.
+
+The player chooses whether the benefit is worth watching the ad.
+
+---
+
+## 10. Screens
 
 The game should remain extremely small and focused.
 
@@ -306,33 +401,40 @@ The game should remain extremely small and focused.
 Planned content:
 
 - Fury O logo
+- difficulty selection / indication
 - Start / Play
+- Revive inventory / Earn Revive entry point
 - Info button
 - copyright footer: `© Morning Coffee Labs`
 
-Score and high score should **not** clutter the home screen.
+Score and high score should **not** clutter the home screen unnecessarily.
+
+Locked modes should clearly communicate that they require a score achievement in the preceding difficulty mode.
 
 ### Game
 
 Minimal gameplay presentation.
 
+Current presentation includes live score.
+
 Avoid unnecessary UI while playing.
 
-Potentially show only the live score if it improves the experience without distracting from the playfield.
+If a Revive has been armed for the run, the UI may show a small unobtrusive indication, but it must not distract from the playfield.
 
 ### Game Over
 
 Dedicated screen shown after failure.
 
-Planned content:
+Current direction:
 
 - Score
-- High Score
-- Restart
-- Back to Home
-- Share / screenshot-friendly presentation later
+- High Score for the selected difficulty
+- branded Fury O Game Over artwork
+- Play Again
+- Home
+- screenshot-friendly presentation
 
-Game Over backgrounds may vary based on score / achievement as a social-sharing gimmick.
+Game Over backgrounds may vary based on score / achievement as a social-sharing gimmick later.
 
 ### Info
 
@@ -349,7 +451,61 @@ Include:
 
 ---
 
-## 10. Social / sharing idea
+## 11. Local persistence
+
+Fury O intentionally has no account or backend.
+
+Local persistent storage should contain only the small amount of state needed by the game.
+
+Current / planned persistent values include:
+
+- High Score for Normal
+- High Score for Fury
+- High Score for Extreme Fury
+- difficulty unlock state, or enough High Score data to derive unlocks
+- Revive inventory count, capped at 3
+
+High Score persistence is already implemented in the prototype and survives app/browser restarts.
+
+Unlock state should preferably be derived from stored High Scores where practical rather than duplicating state.
+
+No:
+
+- cloud save
+- account synchronization
+- global ranking database
+- purchase inventory backend
+
+If the app is removed or local app data is deleted, this local progression may also be lost.
+
+---
+
+## 12. Advertising
+
+Advertising is part of the Fury O business model, but should remain restrained.
+
+### Standard advertising
+
+A small banner ad may be used in the gameplay experience as originally planned, provided it does not interfere with controls or safe screen layout.
+
+### Rewarded advertising
+
+Rewarded video ads are used specifically to earn Revives.
+
+Rules:
+
+- entirely voluntary
+- one completed eligible ad awards one Revive
+- no reward if inventory is already 3/3
+- no daily rewarded-ad cap imposed by the game
+- advertising provider/platform limitations still apply
+- no rewarded-ad interruption at the instant of Game Over is required for the Revive system
+
+The implementation must follow current Google Play, Apple and ad-provider rules, including consent/privacy requirements where applicable.
+
+---
+
+## 13. Social / sharing idea
 
 Later, the Game Over screen can be deliberately designed to make high-score screenshots attractive to share.
 
@@ -360,11 +516,11 @@ Possible ideas:
 - recognizable Fury O ring/logo
 - link to a Fury O / Morning Coffee Labs Facebook page from Info
 
-This is not part of the first gameplay prototype.
+This is not required for the first external gameplay test.
 
 ---
 
-## 11. Audio and feedback
+## 14. Audio and feedback
 
 Later gameplay feedback should remain simple and punchy.
 
@@ -372,19 +528,23 @@ Potential events:
 
 - normal ball eaten
 - ring hit / Game Over
+- Revive triggered
 - bomb warning / visual cue
 - bomb eaten → explosion
 - new high score
+- new difficulty unlocked
 
 When a normal ball is eaten, a short visual **pop / disappearance / small burst effect** should be evaluated. The ball must disappear inside the ring immediately; it must never travel onward and hit the back of the ring.
 
+A triggered Revive should have clear but very short feedback so the player immediately understands that their one second chance has been consumed.
+
 Haptics should be evaluated on physical devices.
 
-Do not add audio before the underlying gameplay loop is proven.
+Do not allow audio or effects to damage responsiveness or readability.
 
 ---
 
-## 12. Prototype status
+## 15. Prototype status
 
 ### Completed
 
@@ -409,40 +569,47 @@ Do not add audio before the underlying gameplay loop is proven.
 - Top/bottom 25% center spawn exclusion zone
 - Ring collision detection
 - Solid ring hit triggers Game Over
-- Temporary tap/click-to-restart Game Over test flow
 - Opening correctly allows a normal ball to enter
 - Ball is detected as eaten once fully inside the ring
 - Eaten ball is removed immediately instead of exiting through the back of the ring
+- Survival scoring: +1 point per second
+- Normal-ball bonus scoring: +5
+- Time-based density progression
+- Home screen
+- Dedicated branded Game Over presentation
+- Play Again / Home flow
+- Local persistent High Score storage
 
-### Current prototype baseline
+### Current gameplay baseline
 
-During mechanics testing:
-
-- maximum active balls: **5**
-- spawn interval: approximately **1.1 s**
+- maximum active balls starts at **5**
+- active-ball cap increases by **1 every 8 seconds**
+- final active-ball cap: **20**
+- spawn interval: approximately **1.1 s → 0.35 s → 0.2 s** through the current progression
 - ball travel time: approximately **3.6–5.0 s**
 - opening: **75°**
 - ring rotation: **5.2 s / revolution**
 
-### Next prototype tasks
+### Next major tasks
 
-1. Add time-based difficulty progression for active ball count.
-2. Gradually build from the current low count toward approximately **10–12 simultaneous balls**.
-3. Observe and tune how quickly the playfield becomes difficult while keeping spawns fair.
-4. Once 10–12 balls are established, introduce gradual ball-speed increase.
-5. Add survival timer and scoring.
-6. Add +5 bonus score for eaten normal balls.
-7. Add a small visual feedback effect when a normal ball is eaten.
-8. Add bombs after the normal-ball gameplay loop is stable.
-9. Replace the temporary Game Over overlay with the planned Game Over screen later.
+1. Run an Android EAS build and begin physical-device/external gameplay testing.
+2. Define and tune the score thresholds required to unlock Fury and Extreme Fury.
+3. Define the concrete difficulty curves for Fury and Extreme Fury after Normal testing.
+4. Add difficulty-mode selection and local unlock progression.
+5. Add Revive inventory and pre-run arming flow.
+6. Integrate rewarded video ads for earning Revives.
+7. Implement the one-Revive-per-run recovery behavior.
+8. Add bombs after the normal-ball loop is sufficiently tested.
+9. Add Info screen and legal/contact links.
+10. Add/tune standard banner advertising.
 
 ---
 
-## 13. Design principles
+## 16. Design principles
 
-Fury O should remain deliberately small.
+Fury O should remain deliberately small even with difficulty progression and Revives.
 
-Do not turn it into a feature-heavy game.
+Do not turn it into a feature-heavy economy game.
 
 Priorities:
 
@@ -453,10 +620,16 @@ Priorities:
 5. Gradual time-based difficulty
 6. Predictable ring behavior
 7. Fast failure/restart loop
-8. Strong "one more try" feeling
+8. Clear difficulty progression
+9. Revive as a limited second chance, not a shortcut
+10. Strong "one more try" feeling
 
 The game succeeds if the player understands it almost immediately but still feels they can improve after every failure.
 
 The intended emotional balance is:
 
 > Difficult enough to provoke laughter, frustration and swearing — but fair enough that the player believes the next attempt can go better.
+
+And when the one Revive is gone, the next mistake is still:
+
+> **GAME OVER.**
