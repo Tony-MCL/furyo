@@ -22,6 +22,10 @@ export default function Page() {
       resizeMode="cover"
       style={styles.container}
     >
+      <Pressable style={styles.infoButton}>
+        <Text style={styles.infoButtonText}>i</Text>
+      </Pressable>
+
       <View style={styles.content}>
         <Image
           source={{ uri: "/fury-logo.svg" }}
@@ -31,10 +35,6 @@ export default function Page() {
 
         <Pressable style={styles.primaryButton} onPress={() => setIsPlaying(true)}>
           <Text style={styles.primaryButtonText}>START SPILL</Text>
-        </Pressable>
-
-        <Pressable style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>INFO</Text>
         </Pressable>
       </View>
 
@@ -79,22 +79,24 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.2,
   },
-  secondaryButton: {
-    marginTop: 16,
-    minWidth: 130,
-    minHeight: 46,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
+  infoButton: {
+    position: "absolute",
+    top: 42,
+    right: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 2,
     borderColor: "#6FE7FF",
-    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
-  secondaryButtonText: {
+  infoButtonText: {
     color: "#F7FAFF",
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: "800",
-    letterSpacing: 1,
+    lineHeight: 24,
   },
   footer: {
     position: "absolute",
