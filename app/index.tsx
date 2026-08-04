@@ -13,7 +13,7 @@ export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   if (isPlaying) {
-    return <FuryRing />;
+    return <FuryRing onHome={() => setIsPlaying(false)} />;
   }
 
   return (
