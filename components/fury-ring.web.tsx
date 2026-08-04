@@ -790,11 +790,11 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   gameOverArtwork: {
-    width: "100%",
-    maxWidth: 520,
-    aspectRatio: 459.75 / 90,
-    marginTop: 80,
-    marginBottom: 64,
+    width: "92%",
+    maxWidth: 560,
+    height: 210,
+    marginTop: 64,
+    marginBottom: 42,
   },
   playAgainButton: {
     width: "78%",
