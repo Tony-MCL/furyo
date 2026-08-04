@@ -5,8 +5,17 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-7463440033205599~9693590947"
+        }
+      ]
     ],
+    "android": {
+      "package": "com.morningcoffeelabs.furyo"
+    },
     "name": "furyo",
     "slug": "furyo"
   }
