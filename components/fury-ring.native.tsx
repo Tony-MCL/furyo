@@ -12,6 +12,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
   useWindowDimensions,
 } from "react-native";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
@@ -52,6 +53,12 @@ const BALL_ANGULAR_CLEARANCE_DEGREES =
   (Math.asin(Math.min(1, BALL_RADIUS / RING_RADIUS)) * 180) / Math.PI;
 const SAFE_GAP_HALF_DEGREES =
   GAP_SIZE_DEGREES / 2 - BALL_ANGULAR_CLEARANCE_DEGREES;
+
+let sessionHighScore = 0;
+
+type FuryRingProps = {
+  onHome?: () => void;
+};
 
 type Edge = "top" | "right" | "bottom" | "left";
 
@@ -319,27 +326,22 @@ function SpawnBall({
 
 function createRingPath() {
   const path = Skia.Path.Make();
-
   const diameter = RING_RADIUS * 2;
-
   const rect = {
     x: RING_CENTER - RING_RADIUS,
     y: RING_CENTER - RING_RADIUS,
     width: diameter,
     height: diameter,
   };
-
   const startAngle = GAP_SIZE_DEGREES / 2;
   const sweepAngle = 360 - GAP_SIZE_DEGREES;
-
   path.addArc(rect, startAngle, sweepAngle);
-
   return path;
 }
 
 const ringPath = createRingPath();
 
-export default function FuryRing() {
+export default function FuryRing({ onHome }: FuryRingProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const rotation = useRef(new Animated.Value(0)).current;
@@ -358,15 +360,19 @@ export default function FuryRing() {
   const nextBallIdRef = useRef(1);
   const gameOverRef = useRef(false);
   const runStartTimeRef = useRef(Date.now());
+  const scoreRef = useRef(0);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [survivalPoints, setSurvivalPoints] = useState(0);
   const [bonusPoints, setBonusPoints] = useState(0);
+  const [finalScore, setFinalScore] = useState(0);
+  const [highScore, setHighScore] = useState(sessionHighScore);
 
   windowHeightRef.current = windowHeight;
 
   const score = survivalPoints + bonusPoints;
+  scoreRef.current = score;
 
   useEffect(() => {
     if (gameOver) {
@@ -502,6 +508,10 @@ export default function FuryRing() {
       return;
     }
 
+    const currentScore = scoreRef.current;
+    sessionHighScore = Math.max(sessionHighScore, currentScore);
+    setFinalScore(currentScore);
+    setHighScore(sessionHighScore);
     gameOverRef.current = true;
     setGameOver(true);
   }, []);
@@ -510,6 +520,7 @@ export default function FuryRing() {
     setBalls([]);
     setSurvivalPoints(0);
     setBonusPoints(0);
+    setFinalScore(0);
     bonusFeedback.stopAnimation();
     bonusFeedback.setValue(0);
 
@@ -616,9 +627,11 @@ export default function FuryRing() {
       style={styles.container}
       {...panResponder.panHandlers}
     >
-      <Text pointerEvents="none" style={styles.scoreText}>
-        Score: {score}
-      </Text>
+      {!gameOver && (
+        <Text pointerEvents="none" style={styles.scoreText}>
+          Score: {score}
+        </Text>
+      )}
 
       {balls.map((ball) => (
         <SpawnBall
@@ -673,10 +686,23 @@ export default function FuryRing() {
       </Animated.View>
 
       {gameOver && (
-        <Pressable style={styles.gameOverOverlay} onPress={restartGame}>
+        <View style={styles.gameOverOverlay}>
           <Text style={styles.gameOverText}>GAME OVER</Text>
-          <Text style={styles.restartText}>Tap to restart</Text>
-        </Pressable>
+
+          <Text style={styles.scoreLabel}>SCORE</Text>
+          <Text style={styles.scoreValue}>{finalScore}</Text>
+
+          <Text style={styles.highScoreLabel}>HIGH SCORE</Text>
+          <Text style={styles.highScoreValue}>{highScore}</Text>
+
+          <Pressable style={styles.playAgainButton} onPress={restartGame}>
+            <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
+          </Pressable>
+
+          <Pressable style={styles.homeButton} onPress={onHome}>
+            <Text style={styles.homeButtonText}>HJEM</Text>
+          </Pressable>
+        </View>
       )}
     </ImageBackground>
   );
@@ -740,20 +766,78 @@ const styles = StyleSheet.create({
   },
   gameOverOverlay: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.62)",
+    backgroundColor: "rgba(0,0,0,0.68)",
+    paddingHorizontal: 32,
   },
   gameOverText: {
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: 2,
+    marginBottom: 34,
+    fontSize: 38,
+    fontWeight: "900",
+    letterSpacing: 2.4,
     color: TEXT_COLOR,
   },
-  restartText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "600",
+  scoreLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "rgba(247,250,255,0.72)",
+  },
+  scoreValue: {
+    marginTop: 4,
+    fontSize: 68,
+    fontWeight: "900",
+    color: RING_COLOR,
+    fontVariant: ["tabular-nums"],
+  },
+  highScoreLabel: {
+    marginTop: 18,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 1.8,
+    color: "rgba(247,250,255,0.72)",
+  },
+  highScoreValue: {
+    marginTop: 3,
+    marginBottom: 34,
+    fontSize: 30,
+    fontWeight: "900",
+    color: BALL_COLOR,
+    fontVariant: ["tabular-nums"],
+  },
+  playAgainButton: {
+    width: "78%",
+    maxWidth: 320,
+    minHeight: 58,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: RING_COLOR,
+    paddingHorizontal: 24,
+  },
+  playAgainButtonText: {
+    color: "#08111f",
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+  homeButton: {
+    marginTop: 16,
+    minWidth: 132,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: BALL_COLOR,
+    paddingHorizontal: 26,
+  },
+  homeButtonText: {
     color: TEXT_COLOR,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
 });
