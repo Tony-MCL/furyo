@@ -688,12 +688,10 @@ export default function FuryRing({ onHome }: FuryRingProps) {
           </View>
 
           <Image
-            source={{ uri: "/fury-logo.svg" }}
+            source={{ uri: "/fury-game-over.svg" }}
             resizeMode="contain"
-            style={styles.gameOverLogo}
+            style={styles.gameOverArtwork}
           />
-
-          <Text style={styles.gameOverText}>GAME OVER</Text>
 
           <Pressable style={styles.playAgainButton} onPress={restartGame}>
             <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
@@ -702,6 +700,12 @@ export default function FuryRing({ onHome }: FuryRingProps) {
           <Pressable style={styles.homeButton} onPress={onHome}>
             <Text style={styles.homeButtonText}>HJEM</Text>
           </Pressable>
+
+          <Image
+            source={{ uri: "/fury-logo.svg" }}
+            resizeMode="contain"
+            style={styles.gameOverBrandLogo}
+          />
         </View>
       )}
     </ImageBackground>
@@ -791,19 +795,12 @@ const styles = StyleSheet.create({
     color: BALL_COLOR,
     fontVariant: ["tabular-nums"],
   },
-  gameOverLogo: {
-    width: "66%",
-    maxWidth: 340,
-    aspectRatio: 1.16,
-    marginTop: 54,
-  },
-  gameOverText: {
-    marginTop: 12,
-    marginBottom: 48,
-    fontSize: 38,
-    fontWeight: "900",
-    letterSpacing: 2.4,
-    color: TEXT_COLOR,
+  gameOverArtwork: {
+    width: "82%",
+    maxWidth: 440,
+    aspectRatio: 459.75 / 90,
+    marginTop: 92,
+    marginBottom: 64,
   },
   playAgainButton: {
     width: "78%",
@@ -837,5 +834,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 1,
+  },
+  gameOverBrandLogo: {
+    position: "absolute",
+    bottom: 34,
+    width: 92,
+    height: 92,
   },
 });
