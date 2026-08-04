@@ -27,12 +27,12 @@ const SIZE = 79;
 const CENTER = SIZE / 2;
 const RADIUS = 24;
 const STROKE_WIDTH = 5;
-
 const GAP_DEGREES = 75;
 const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
+const REVIVE_INVULNERABILITY_MS = 1000;
 
 const RING_COLOR = "#FFB000";
 const BALL_COLOR = "#6FE7FF";
@@ -261,7 +261,7 @@ function ballHitsRing(ballX: number, ballY: number, ring: RingState) {
 type SpawnBallProps = {
   ball: BallData;
   getRingState: () => RingState;
-  onCollision: () => void;
+  onCollision: (id: number) => void;
   onEaten: (id: number) => void;
   onDone: (id: number) => void;
 };
@@ -298,7 +298,7 @@ function SpawnBall({
 
       if (ballHitsRing(x, y, ring)) {
         resolvedRef.current = true;
-        onCollision();
+        onCollision(ball.id);
       }
     });
 
@@ -351,6 +351,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const bonusFeedback = useRef(new Animated.Value(0)).current;
+  const reviveFeedback = useRef(new Animated.Value(0)).current;
 
   const angleRef = useRef(0);
   const directionRef = useRef(1);
@@ -365,6 +366,8 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const gameOverRef = useRef(false);
   const runStartTimeRef = useRef(Date.now());
   const scoreRef = useRef(0);
+  const reviveUsedRef = useRef(false);
+  const invulnerableUntilRef = useRef(0);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -372,6 +375,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const [bonusPoints, setBonusPoints] = useState(0);
   const [finalScore, setFinalScore] = useState(0);
   const [highScore, setHighScore] = useState(sessionHighScores[difficulty]);
+  const [reviveUsed, setReviveUsed] = useState(false);
 
   windowHeightRef.current = windowHeight;
 
@@ -540,6 +544,25 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     ]).start();
   }, [bonusFeedback]);
 
+  const showReviveFeedback = useCallback(() => {
+    reviveFeedback.stopAnimation();
+    reviveFeedback.setValue(0);
+
+    Animated.sequence([
+      Animated.timing(reviveFeedback, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: false,
+      }),
+      Animated.delay(700),
+      Animated.timing(reviveFeedback, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [reviveFeedback]);
+
   const handleEaten = useCallback(
     (id: number) => {
       removeBall(id);
@@ -549,37 +572,57 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     [removeBall, showBonusFeedback],
   );
 
-  const handleCollision = useCallback(() => {
-    if (gameOverRef.current) {
-      return;
-    }
+  const handleCollision = useCallback(
+    (id: number) => {
+      if (gameOverRef.current) {
+        return;
+      }
 
-    const currentScore = scoreRef.current;
-    const previousHighScore = sessionHighScores[difficulty];
-    sessionHighScores[difficulty] = Math.max(previousHighScore, currentScore);
-    setFinalScore(currentScore);
-    setHighScore(sessionHighScores[difficulty]);
+      if (Date.now() < invulnerableUntilRef.current) {
+        removeBall(id);
+        return;
+      }
 
-    if (sessionHighScores[difficulty] > previousHighScore) {
-      AsyncStorage.setItem(
-        getHighScoreStorageKey(difficulty),
-        String(sessionHighScores[difficulty]),
-      ).catch(() => {
-        // Keep the game responsive even if storage is unavailable.
-      });
-    }
+      if (!reviveUsedRef.current) {
+        reviveUsedRef.current = true;
+        setReviveUsed(true);
+        invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
+        removeBall(id);
+        showReviveFeedback();
+        return;
+      }
 
-    gameOverRef.current = true;
-    setGameOver(true);
-  }, [difficulty]);
+      const currentScore = scoreRef.current;
+      const previousHighScore = sessionHighScores[difficulty];
+      sessionHighScores[difficulty] = Math.max(previousHighScore, currentScore);
+      setFinalScore(currentScore);
+      setHighScore(sessionHighScores[difficulty]);
+
+      if (sessionHighScores[difficulty] > previousHighScore) {
+        AsyncStorage.setItem(
+          getHighScoreStorageKey(difficulty),
+          String(sessionHighScores[difficulty]),
+        ).catch(() => {
+          // Keep the game responsive even if storage is unavailable.
+        });
+      }
+
+      gameOverRef.current = true;
+      setGameOver(true);
+    },
+    [difficulty, removeBall, showReviveFeedback],
+  );
 
   const restartGame = useCallback(() => {
     setBalls([]);
     setSurvivalPoints(0);
     setBonusPoints(0);
     setFinalScore(0);
+    setReviveUsed(false);
     bonusFeedback.stopAnimation();
     bonusFeedback.setValue(0);
+    reviveFeedback.stopAnimation();
+    reviveFeedback.setValue(0);
 
     nextBallIdRef.current = 1;
     runStartTimeRef.current = Date.now();
@@ -593,9 +636,11 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     lastTimestampRef.current = null;
     rotation.setValue(0);
 
+    reviveUsedRef.current = false;
+    invulnerableUntilRef.current = 0;
     gameOverRef.current = false;
     setGameOver(false);
-  }, [bonusFeedback, rotation, translateY]);
+  }, [bonusFeedback, reviveFeedback, rotation, translateY]);
 
   const getRingState = useCallback(
     (): RingState => ({
@@ -692,6 +737,9 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
           <Text pointerEvents="none" style={styles.difficultyText}>
             {difficultyConfig.label}
           </Text>
+          <Text pointerEvents="none" style={styles.reviveStatusText}>
+            REVIVE {reviveUsed ? "USED" : "READY"}
+          </Text>
         </>
       )}
 
@@ -748,6 +796,15 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
           ]}
         >
           +{EATEN_BALL_BONUS}
+        </Animated.Text>
+
+        <Animated.View
+          style={[styles.reviveGlow, { opacity: reviveFeedback }]}
+        />
+        <Animated.Text
+          style={[styles.reviveText, { opacity: reviveFeedback }]}
+        >
+          REVIVE!
         </Animated.Text>
       </Animated.View>
 
@@ -810,6 +867,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.1,
   },
+  reviveStatusText: {
+    position: "absolute",
+    top: 76,
+    left: 25,
+    zIndex: 5,
+    color: "rgba(255,209,102,0.86)",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
   ball: {
     position: "absolute",
     left: "50%",
@@ -841,6 +908,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     color: BONUS_COLOR,
+  },
+  reviveGlow: {
+    position: "absolute",
+    left: -8,
+    top: -8,
+    width: SIZE + 16,
+    height: SIZE + 16,
+    borderRadius: (SIZE + 16) / 2,
+    borderWidth: 3,
+    borderColor: BONUS_COLOR,
+  },
+  reviveText: {
+    position: "absolute",
+    top: SIZE + 8,
+    left: -40,
+    width: SIZE + 80,
+    textAlign: "center",
+    color: BONUS_COLOR,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1.3,
   },
   gameOverOverlay: {
     ...StyleSheet.absoluteFillObject,
