@@ -32,6 +32,7 @@ const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
+const REVIVE_INVULNERABILITY_MS = 1000;
 
 const RING_COLOR = "#FFB000";
 const BALL_COLOR = "#6FE7FF";
@@ -133,14 +134,10 @@ function getSpawnInterval(elapsedMs: number, difficulty: FuryDifficulty) {
 
 function getOppositeEdge(edge: Edge): Edge {
   switch (edge) {
-    case "top":
-      return "bottom";
-    case "right":
-      return "left";
-    case "bottom":
-      return "top";
-    case "left":
-      return "right";
+    case "top": return "bottom";
+    case "right": return "left";
+    case "bottom": return "top";
+    case "left": return "right";
   }
 }
 
@@ -254,7 +251,7 @@ function ballHitsRing(ballX: number, ballY: number, ring: RingState) {
 type SpawnBallProps = {
   ball: BallData;
   getRingState: () => RingState;
-  onCollision: () => void;
+  onCollision: (id: number) => void;
   onEaten: (id: number) => void;
   onDone: (id: number) => void;
 };
@@ -271,14 +268,10 @@ function SpawnBall({
 
   useEffect(() => {
     const listenerId = progress.addListener(({ value }) => {
-      if (resolvedRef.current) {
-        return;
-      }
+      if (resolvedRef.current) return;
 
       const ring = getRingState();
-      if (ring.gameOver) {
-        return;
-      }
+      if (ring.gameOver) return;
 
       const x = ball.startX + (ball.endX - ball.startX) * value;
       const y = ball.startY + (ball.endY - ball.startY) * value;
@@ -291,7 +284,7 @@ function SpawnBall({
 
       if (ballHitsRing(x, y, ring)) {
         resolvedRef.current = true;
-        onCollision();
+        onCollision(ball.id);
       }
     });
 
@@ -303,9 +296,7 @@ function SpawnBall({
     });
 
     animation.start(({ finished }) => {
-      if (finished && !resolvedRef.current) {
-        onDone(ball.id);
-      }
+      if (finished && !resolvedRef.current) onDone(ball.id);
     });
 
     return () => {
@@ -318,7 +309,6 @@ function SpawnBall({
     inputRange: [0, 1],
     outputRange: [ball.startX, ball.endX],
   });
-
   const translateY = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [ball.startY, ball.endY],
@@ -327,12 +317,7 @@ function SpawnBall({
   return (
     <Animated.View
       pointerEvents="none"
-      style={[
-        styles.ball,
-        {
-          transform: [{ translateX }, { translateY }],
-        },
-      ]}
+      style={[styles.ball, { transform: [{ translateX }, { translateY }] }]}
     />
   );
 }
@@ -361,6 +346,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const rotation = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const bonusFeedback = useRef(new Animated.Value(0)).current;
+  const reviveFeedback = useRef(new Animated.Value(0)).current;
 
   const angleRef = useRef(0);
   const directionRef = useRef(1);
@@ -375,6 +361,8 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const gameOverRef = useRef(false);
   const runStartTimeRef = useRef(Date.now());
   const scoreRef = useRef(0);
+  const reviveUsedRef = useRef(false);
+  const invulnerableUntilRef = useRef(0);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -382,71 +370,44 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const [bonusPoints, setBonusPoints] = useState(0);
   const [finalScore, setFinalScore] = useState(0);
   const [highScore, setHighScore] = useState(sessionHighScores[difficulty]);
+  const [reviveUsed, setReviveUsed] = useState(false);
 
   windowHeightRef.current = windowHeight;
-
   const score = survivalPoints + bonusPoints;
   scoreRef.current = score;
 
   useEffect(() => {
     let cancelled = false;
-
     const loadHighScore = async () => {
       try {
         const storageKey = getHighScoreStorageKey(difficulty);
         let storedValue = await AsyncStorage.getItem(storageKey);
-
         if (storedValue === null && difficulty === "normal") {
           storedValue = await AsyncStorage.getItem(LEGACY_HIGH_SCORE_STORAGE_KEY);
-          if (storedValue !== null) {
-            await AsyncStorage.setItem(storageKey, storedValue);
-          }
+          if (storedValue !== null) await AsyncStorage.setItem(storageKey, storedValue);
         }
-
-        if (storedValue === null || cancelled) {
-          return;
-        }
-
+        if (storedValue === null || cancelled) return;
         const storedHighScore = Number.parseInt(storedValue, 10);
-        if (!Number.isFinite(storedHighScore) || storedHighScore < 0) {
-          return;
-        }
-
+        if (!Number.isFinite(storedHighScore) || storedHighScore < 0) return;
         sessionHighScores[difficulty] = Math.max(
           sessionHighScores[difficulty],
           storedHighScore,
         );
         setHighScore(sessionHighScores[difficulty]);
-      } catch {
-        // High score persistence should never block gameplay.
-      }
+      } catch {}
     };
-
     loadHighScore();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [difficulty]);
 
   useEffect(() => {
-    if (gameOver) {
-      return;
-    }
-
+    if (gameOver) return;
     const updateSurvivalPoints = () => {
-      const elapsedSeconds = Math.floor(
-        (Date.now() - runStartTimeRef.current) / 1000,
-      );
-      setSurvivalPoints(elapsedSeconds);
+      setSurvivalPoints(Math.floor((Date.now() - runStartTimeRef.current) / 1000));
     };
-
     updateSurvivalPoints();
     const interval = setInterval(updateSurvivalPoints, 200);
-
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [gameOver]);
 
   useEffect(() => {
@@ -454,52 +415,33 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
       if (!gameOverRef.current) {
         if (lastTimestampRef.current !== null) {
           const deltaMs = timestamp - lastTimestampRef.current;
-
           angleRef.current =
             (angleRef.current +
               directionRef.current * DEGREES_PER_MS * deltaMs +
               360) %
             360;
-
           rotation.setValue(angleRef.current);
         }
-
         lastTimestampRef.current = timestamp;
       }
-
       frameRef.current = requestAnimationFrame(animate);
     };
-
     frameRef.current = requestAnimationFrame(animate);
-
     return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-      }
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
   }, [rotation]);
 
   useEffect(() => {
-    if (windowWidth <= 0 || windowHeight <= 0 || gameOver) {
-      return;
-    }
-
+    if (windowWidth <= 0 || windowHeight <= 0 || gameOver) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
     const spawnAndSchedule = () => {
-      if (gameOverRef.current) {
-        return;
-      }
-
+      if (gameOverRef.current) return;
       const elapsedMs = Date.now() - runStartTimeRef.current;
       const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
       const spawnInterval = getSpawnInterval(elapsedMs, difficulty);
-
       setBalls((currentBalls) => {
-        if (currentBalls.length >= maxActiveBalls) {
-          return currentBalls;
-        }
-
+        if (currentBalls.length >= maxActiveBalls) return currentBalls;
         const ball = createBall(
           nextBallIdRef.current,
           windowWidth,
@@ -507,32 +449,23 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
           difficulty,
         );
         nextBallIdRef.current += 1;
-
         return [...currentBalls, ball];
       });
-
       timeoutId = setTimeout(spawnAndSchedule, spawnInterval);
     };
-
     spawnAndSchedule();
-
     return () => {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId !== null) clearTimeout(timeoutId);
     };
   }, [difficulty, gameOver, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
-    setBalls((currentBalls) =>
-      currentBalls.filter((ball) => ball.id !== id),
-    );
+    setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
   }, []);
 
   const showBonusFeedback = useCallback(() => {
     bonusFeedback.stopAnimation();
     bonusFeedback.setValue(0);
-
     Animated.sequence([
       Animated.timing(bonusFeedback, {
         toValue: 1,
@@ -550,17 +483,44 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     ]).start();
   }, [bonusFeedback]);
 
-  const handleEaten = useCallback(
-    (id: number) => {
-      removeBall(id);
-      setBonusPoints((current) => current + EATEN_BALL_BONUS);
-      showBonusFeedback();
-    },
-    [removeBall, showBonusFeedback],
-  );
+  const showReviveFeedback = useCallback(() => {
+    reviveFeedback.stopAnimation();
+    reviveFeedback.setValue(0);
+    Animated.sequence([
+      Animated.timing(reviveFeedback, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: false,
+      }),
+      Animated.delay(700),
+      Animated.timing(reviveFeedback, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [reviveFeedback]);
 
-  const handleCollision = useCallback(() => {
-    if (gameOverRef.current) {
+  const handleEaten = useCallback((id: number) => {
+    removeBall(id);
+    setBonusPoints((current) => current + EATEN_BALL_BONUS);
+    showBonusFeedback();
+  }, [removeBall, showBonusFeedback]);
+
+  const handleCollision = useCallback((id: number) => {
+    if (gameOverRef.current) return;
+
+    if (Date.now() < invulnerableUntilRef.current) {
+      removeBall(id);
+      return;
+    }
+
+    if (!reviveUsedRef.current) {
+      reviveUsedRef.current = true;
+      setReviveUsed(true);
+      invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
+      removeBall(id);
+      showReviveFeedback();
       return;
     }
 
@@ -569,27 +529,26 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     sessionHighScores[difficulty] = Math.max(previousHighScore, currentScore);
     setFinalScore(currentScore);
     setHighScore(sessionHighScores[difficulty]);
-
     if (sessionHighScores[difficulty] > previousHighScore) {
       AsyncStorage.setItem(
         getHighScoreStorageKey(difficulty),
         String(sessionHighScores[difficulty]),
-      ).catch(() => {
-        // Keep the game responsive even if storage is unavailable.
-      });
+      ).catch(() => {});
     }
-
     gameOverRef.current = true;
     setGameOver(true);
-  }, [difficulty]);
+  }, [difficulty, removeBall, showReviveFeedback]);
 
   const restartGame = useCallback(() => {
     setBalls([]);
     setSurvivalPoints(0);
     setBonusPoints(0);
     setFinalScore(0);
+    setReviveUsed(false);
     bonusFeedback.stopAnimation();
     bonusFeedback.setValue(0);
+    reviveFeedback.stopAnimation();
+    reviveFeedback.setValue(0);
 
     nextBallIdRef.current = 1;
     runStartTimeRef.current = Date.now();
@@ -603,9 +562,11 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     lastTimestampRef.current = null;
     rotation.setValue(0);
 
+    reviveUsedRef.current = false;
+    invulnerableUntilRef.current = 0;
     gameOverRef.current = false;
     setGameOver(false);
-  }, [bonusFeedback, rotation, translateY]);
+  }, [bonusFeedback, reviveFeedback, rotation, translateY]);
 
   const getRingState = useCallback(
     (): RingState => ({
@@ -617,9 +578,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   );
 
   const reverseDirection = () => {
-    if (!gameOverRef.current) {
-      directionRef.current *= -1;
-    }
+    if (!gameOverRef.current) directionRef.current *= -1;
   };
 
   const getVerticalLimit = () =>
@@ -642,23 +601,18 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
         maxDragDistanceRef.current = 0;
       },
       onPanResponderMove: (_event, gestureState) => {
-        if (gameOverRef.current) {
-          return;
-        }
-
+        if (gameOverRef.current) return;
         const dragDistance = Math.hypot(gestureState.dx, gestureState.dy);
         maxDragDistanceRef.current = Math.max(
           maxDragDistanceRef.current,
           dragDistance,
         );
-
         const verticalLimit = getVerticalLimit();
         const nextY = clamp(
           dragStartYRef.current + gestureState.dy,
           -verticalLimit,
           verticalLimit,
         );
-
         ringYRef.current = nextY;
         translateY.setValue(nextY);
       },
@@ -681,7 +635,6 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     inputRange: [0, 360],
     outputRange: ["0deg", "360deg"],
   });
-
   const bonusScale = bonusFeedback.interpolate({
     inputRange: [0, 1],
     outputRange: [0.65, 1],
@@ -702,6 +655,9 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
           <Text pointerEvents="none" style={styles.difficultyText}>
             {difficultyConfig.label}
           </Text>
+          <Text pointerEvents="none" style={styles.reviveStatusText}>
+            REVIVE {reviveUsed ? "USED" : "READY"}
+          </Text>
         </>
       )}
 
@@ -718,20 +674,10 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
 
       <Animated.View
         pointerEvents="none"
-        style={[
-          styles.movementLayer,
-          {
-            transform: [{ translateY }],
-          },
-        ]}
+        style={[styles.movementLayer, { transform: [{ translateY }] }]}
       >
         <Animated.View
-          style={[
-            styles.ringSurface,
-            {
-              transform: [{ rotate }],
-            },
-          ]}
+          style={[styles.ringSurface, { transform: [{ rotate }] }]}
         >
           <Canvas style={styles.canvas}>
             <Path
@@ -747,13 +693,18 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
         <Animated.Text
           style={[
             styles.bonusText,
-            {
-              opacity: bonusFeedback,
-              transform: [{ scale: bonusScale }],
-            },
+            { opacity: bonusFeedback, transform: [{ scale: bonusScale }] },
           ]}
         >
           +{EATEN_BALL_BONUS}
+        </Animated.Text>
+        <Animated.View
+          style={[styles.reviveGlow, { opacity: reviveFeedback }]}
+        />
+        <Animated.Text
+          style={[styles.reviveText, { opacity: reviveFeedback }]}
+        >
+          REVIVE!
         </Animated.Text>
       </Animated.View>
 
@@ -813,6 +764,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.1,
   },
+  reviveStatusText: {
+    position: "absolute",
+    top: 76,
+    left: 25,
+    zIndex: 5,
+    color: "rgba(255,209,102,0.86)",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
   ball: {
     position: "absolute",
     left: "50%",
@@ -848,6 +809,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     color: BONUS_COLOR,
+  },
+  reviveGlow: {
+    position: "absolute",
+    left: -8,
+    top: -8,
+    width: CANVAS_SIZE + 16,
+    height: CANVAS_SIZE + 16,
+    borderRadius: (CANVAS_SIZE + 16) / 2,
+    borderWidth: 3,
+    borderColor: BONUS_COLOR,
+  },
+  reviveText: {
+    position: "absolute",
+    top: CANVAS_SIZE + 8,
+    left: -40,
+    width: CANVAS_SIZE + 80,
+    textAlign: "center",
+    color: BONUS_COLOR,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1.3,
   },
   gameOverOverlay: {
     ...StyleSheet.absoluteFillObject,
