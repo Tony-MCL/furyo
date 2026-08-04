@@ -16,6 +16,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Svg, { Circle } from "react-native-svg";
 
 const SIZE = 79;
@@ -47,6 +48,7 @@ const FINAL_MAX_BALLS = 20;
 const BALL_COUNT_STEP_MS = 8000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.25;
 const EATEN_BALL_BONUS = 5;
+const HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
 
 const COLLISION_HALF_WIDTH = STROKE_WIDTH / 2 + BALL_RADIUS;
 const COLLISION_INNER_RADIUS = RADIUS - COLLISION_HALF_WIDTH;
@@ -366,6 +368,35 @@ export default function FuryRing({ onHome }: FuryRingProps) {
   scoreRef.current = score;
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadHighScore = async () => {
+      try {
+        const storedValue = await AsyncStorage.getItem(HIGH_SCORE_STORAGE_KEY);
+        if (storedValue === null || cancelled) {
+          return;
+        }
+
+        const storedHighScore = Number.parseInt(storedValue, 10);
+        if (!Number.isFinite(storedHighScore) || storedHighScore < 0) {
+          return;
+        }
+
+        sessionHighScore = Math.max(sessionHighScore, storedHighScore);
+        setHighScore(sessionHighScore);
+      } catch {
+        // High score persistence should never block gameplay.
+      }
+    };
+
+    loadHighScore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (gameOver) {
       return;
     }
@@ -500,9 +531,20 @@ export default function FuryRing({ onHome }: FuryRingProps) {
     }
 
     const currentScore = scoreRef.current;
+    const previousHighScore = sessionHighScore;
     sessionHighScore = Math.max(sessionHighScore, currentScore);
     setFinalScore(currentScore);
     setHighScore(sessionHighScore);
+
+    if (sessionHighScore > previousHighScore) {
+      AsyncStorage.setItem(
+        HIGH_SCORE_STORAGE_KEY,
+        String(sessionHighScore),
+      ).catch(() => {
+        // Keep the game responsive even if storage is unavailable.
+      });
+    }
+
     gameOverRef.current = true;
     setGameOver(true);
   }, []);
