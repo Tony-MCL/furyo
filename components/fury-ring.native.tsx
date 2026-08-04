@@ -7,6 +7,7 @@ import React, {
 import {
   Animated,
   Easing,
+  Image,
   ImageBackground,
   PanResponder,
   Pressable,
@@ -687,13 +688,18 @@ export default function FuryRing({ onHome }: FuryRingProps) {
 
       {gameOver && (
         <View style={styles.gameOverOverlay}>
+          <View style={styles.gameOverScoreRow}>
+            <Text style={styles.gameOverScoreText}>Score: {finalScore}</Text>
+            <Text style={styles.gameOverHighScoreText}>High Score: {highScore}</Text>
+          </View>
+
+          <Image
+            source={require("../public/fury-logo.svg")}
+            resizeMode="contain"
+            style={styles.gameOverLogo}
+          />
+
           <Text style={styles.gameOverText}>GAME OVER</Text>
-
-          <Text style={styles.scoreLabel}>SCORE</Text>
-          <Text style={styles.scoreValue}>{finalScore}</Text>
-
-          <Text style={styles.highScoreLabel}>HIGH SCORE</Text>
-          <Text style={styles.highScoreValue}>{highScore}</Text>
 
           <Pressable style={styles.playAgainButton} onPress={restartGame}>
             <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
@@ -768,44 +774,43 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.68)",
-    paddingHorizontal: 32,
+    backgroundColor: "rgba(0,0,0,0.56)",
+    paddingHorizontal: 28,
+    paddingTop: 42,
+    paddingBottom: 28,
   },
-  gameOverText: {
-    marginBottom: 34,
-    fontSize: 38,
-    fontWeight: "900",
-    letterSpacing: 2.4,
-    color: TEXT_COLOR,
+  gameOverScoreRow: {
+    width: "100%",
+    maxWidth: 520,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  scoreLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: 2,
-    color: "rgba(247,250,255,0.72)",
-  },
-  scoreValue: {
-    marginTop: 4,
-    fontSize: 68,
+  gameOverScoreText: {
+    fontSize: 18,
     fontWeight: "900",
     color: RING_COLOR,
     fontVariant: ["tabular-nums"],
   },
-  highScoreLabel: {
-    marginTop: 18,
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 1.8,
-    color: "rgba(247,250,255,0.72)",
-  },
-  highScoreValue: {
-    marginTop: 3,
-    marginBottom: 34,
-    fontSize: 30,
+  gameOverHighScoreText: {
+    fontSize: 18,
     fontWeight: "900",
     color: BALL_COLOR,
     fontVariant: ["tabular-nums"],
+  },
+  gameOverLogo: {
+    width: "66%",
+    maxWidth: 340,
+    aspectRatio: 1.16,
+    marginTop: 54,
+  },
+  gameOverText: {
+    marginTop: 12,
+    marginBottom: 48,
+    fontSize: 38,
+    fontWeight: "900",
+    letterSpacing: 2.4,
+    color: TEXT_COLOR,
   },
   playAgainButton: {
     width: "78%",
