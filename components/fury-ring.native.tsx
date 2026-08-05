@@ -51,6 +51,10 @@ const BOMB_MIN_INTERVAL_MS = 6000;
 const BOMB_MAX_INTERVAL_MS = 14000;
 const BONUS_BALL_CHANCE = 0.06;
 const SPECIAL_BALL_BONUS = 10;
+const NORMAL_BONUS_SPEEDUP_CHANCE = 0.25;
+const NORMAL_BONUS_SPEEDUP_MULTIPLIER = 0.5;
+const FURY_BONUS_SLOW_MULTIPLIER = 2;
+const EXTREME_FURY_BONUS_SLOW_MULTIPLIER = 5;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.4;
 const EATEN_BALL_BONUS = 5;
 const LEGACY_HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
@@ -212,6 +216,14 @@ function getPointOnEdge(
   }
 }
 
+function getBonusDurationMultiplier(difficulty: FuryDifficulty) {
+  if (difficulty === "fury") return FURY_BONUS_SLOW_MULTIPLIER;
+  if (difficulty === "extreme-fury") return EXTREME_FURY_BONUS_SLOW_MULTIPLIER;
+  return Math.random() < NORMAL_BONUS_SPEEDUP_CHANCE
+    ? NORMAL_BONUS_SPEEDUP_MULTIPLIER
+    : 1;
+}
+
 function createProjectile(
   id: number,
   width: number,
@@ -226,6 +238,12 @@ function createProjectile(
   const end = getPointOnEdge(endEdge, width, height);
   const slow = kind === "ball" && Math.random() < SLOW_BALL_CHANCE;
   const baseDuration = randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs);
+  const durationMultiplier =
+    kind === "bonus"
+      ? getBonusDurationMultiplier(difficulty)
+      : slow
+        ? SLOW_BALL_DURATION_MULTIPLIER
+        : 1;
 
   return {
     id,
@@ -235,7 +253,7 @@ function createProjectile(
     startY: start.y,
     endX: end.x,
     endY: end.y,
-    duration: baseDuration * (slow ? SLOW_BALL_DURATION_MULTIPLIER : 1),
+    duration: baseDuration * durationMultiplier,
   };
 }
 
