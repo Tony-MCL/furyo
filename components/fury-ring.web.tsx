@@ -49,6 +49,8 @@ const SLOW_BALL_CHANCE = 0.1;
 const SLOW_BALL_DURATION_MULTIPLIER = 2;
 const BOMB_MIN_INTERVAL_MS = 6000;
 const BOMB_MAX_INTERVAL_MS = 14000;
+const BONUS_BALL_CHANCE = 0.06;
+const SPECIAL_BALL_BONUS = 10;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.4;
 const EATEN_BALL_BONUS = 5;
 const LEGACY_HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
@@ -76,7 +78,7 @@ type FuryRingProps = {
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
-type ProjectileKind = "ball" | "bomb";
+type ProjectileKind = "ball" | "bomb" | "bonus";
 
 type BallData = {
   id: number;
@@ -356,6 +358,17 @@ function SpawnBall({
     outputRange: [ball.startY, ball.endY],
   });
 
+  if (ball.kind === "bonus") {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.bonusBall, { transform: [{ translateX }, { translateY }] }]}
+      >
+        <Text style={styles.bonusBallText}>10</Text>
+      </Animated.View>
+    );
+  }
+
   if (ball.kind === "bomb") {
     return (
       <Animated.View
@@ -596,7 +609,8 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       setBalls((currentBalls) => {
         const activeNormalBalls = currentBalls.filter((ball) => ball.kind === "ball").length;
         if (activeNormalBalls >= maxActiveBalls) return currentBalls;
-        const ball = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, "ball");
+        const kind: ProjectileKind = Math.random() < BONUS_BALL_CHANCE ? "bonus" : "ball";
+        const ball = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, kind);
         nextBallIdRef.current += 1;
         return [...currentBalls, ball];
       });
@@ -639,7 +653,10 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
   }, []);
 
-  const showBonusFeedback = useCallback(() => {
+  const bonusFeedbackPointsRef = useRef(EATEN_BALL_BONUS);
+
+  const showBonusFeedback = useCallback((points = EATEN_BALL_BONUS) => {
+    bonusFeedbackPointsRef.current = points;
     bonusFeedback.stopAnimation();
     bonusFeedback.setValue(0);
     Animated.sequence([
@@ -698,8 +715,9 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       return;
     }
     removeBall(id);
-    setBonusPoints((current) => current + EATEN_BALL_BONUS);
-    showBonusFeedback();
+    const points = kind === "bonus" ? SPECIAL_BALL_BONUS : EATEN_BALL_BONUS;
+    setBonusPoints((current) => current + points);
+    showBonusFeedback(points);
   }, [handleCollision, removeBall, showBonusFeedback]);
 
   const getRingState = useCallback(
@@ -800,7 +818,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         </Animated.View>
 
         <Animated.Text style={[styles.bonusText, { opacity: bonusFeedback, transform: [{ scale: bonusScale }] }]}>
-          +{EATEN_BALL_BONUS}
+          +{bonusFeedbackPointsRef.current}
         </Animated.Text>
         <Animated.View style={[styles.reviveGlow, { opacity: reviveFeedback }]} />
         <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>{strings.revive}</Animated.Text>
@@ -868,6 +886,27 @@ const styles = StyleSheet.create({
     marginTop: -BALL_SIZE / 2,
     borderRadius: BALL_SIZE / 2,
     backgroundColor: BALL_COLOR,
+  },
+  bonusBall: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    marginTop: -8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFD166",
+    borderWidth: 2,
+    borderColor: "#FFF4C2",
+  },
+  bonusBallText: {
+    color: "#3A2500",
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: "900",
   },
   bomb: {
     position: "absolute",
