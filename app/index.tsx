@@ -26,7 +26,7 @@ import {
 
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const MAX_REVIVES = 3;
-const GAME_OVER_TRANSITION_MS = 500;
+const GAME_OVER_TRANSITION_MS = 1000;
 const NIGHT_SKY_SOURCE =
   Platform.OS === "web"
     ? { uri: "/nightsky.png" }
