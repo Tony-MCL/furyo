@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import FuryArtwork from "../components/fury-artwork";
@@ -43,6 +44,7 @@ type GameOverResult = {
 };
 
 export default function Page() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [isPlaying, setIsPlaying] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
@@ -150,21 +152,21 @@ export default function Page() {
       <View style={styles.playShell}>
         <FuryRing difficulty={difficulty} onGameOver={handleGameOver} />
         {gameOverTransitioning && gameOverResult && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.gameOverTransitionLayer,
-              {
+          <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
+            <Animated.View
+              style={{
+                width: screenWidth,
+                height: screenHeight,
                 opacity: gameOverOpacity,
                 transform: [
                   { scale: gameOverScale },
                   { rotate: gameOverRotate },
                 ],
-              },
-            ]}
-          >
-            <GameOverScreen result={gameOverResult} interactive={false} />
-          </Animated.View>
+              }}
+            >
+              <GameOverScreen result={gameOverResult} interactive={false} />
+            </Animated.View>
+          </View>
         )}
       </View>
     );
@@ -315,7 +317,13 @@ function GameOverScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#02050d" },
   playShell: { flex: 1, width: "100%", height: "100%", backgroundColor: "#02050d", overflow: "hidden" },
-  gameOverTransitionLayer: { ...StyleSheet.absoluteFillObject, zIndex: 50 },
+  gameOverTransitionLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
   content: { width: "100%", alignItems: "center", paddingHorizontal: 24 },
   logo: { width: "72%", maxWidth: 390, aspectRatio: 1.16, marginBottom: 14 },
   revivePanel: { width: "78%", maxWidth: 320, alignItems: "center", marginBottom: 22 },
