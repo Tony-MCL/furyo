@@ -1,6 +1,33 @@
 export type FuryLanguage = "en" | "no";
 
-const EN = {
+export type FuryStrings = {
+  infoTitle: string;
+  infoIntro: string;
+  infoControls: string;
+  infoBonus: string;
+  privacyPolicy: string;
+  termsOfUse: string;
+  contact: string;
+  revives: string;
+  noReviveEarned: string;
+  adNotReady: string;
+  reviveFull: string;
+  loadingAd: string;
+  earnRevive: string;
+  reviveHint: string;
+  difficulty: string;
+  startGame: string;
+  score: string;
+  highScore: string;
+  usedThisRound: string;
+  ready: string;
+  empty: string;
+  revive: string;
+  playAgain: string;
+  home: string;
+};
+
+const EN: FuryStrings = {
   infoTitle: "INFO",
   infoIntro: "Move the ring. Control the opening. Survive as long as you can.",
   infoControls:
@@ -27,9 +54,9 @@ const EN = {
   revive: "REVIVE!",
   playAgain: "PLAY AGAIN",
   home: "HOME",
-} as const;
+};
 
-const NO: typeof EN = {
+const NO: FuryStrings = {
   infoTitle: "INFO",
   infoIntro: "Flytt ringen. Kontroller åpningen. Overlev så lenge du kan.",
   infoControls:
@@ -57,8 +84,6 @@ const NO: typeof EN = {
   playAgain: "SPILL IGJEN",
   home: "HJEM",
 };
-
-export type FuryStrings = typeof EN;
 
 function detectLanguage(): FuryLanguage {
   try {
