@@ -1,0 +1,80 @@
+name: Apply bonus ball speed probabilities
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-bonus-ball-speed.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch native and web bonus speed logic
+        shell: python
+        run: |
+          from pathlib import Path
+
+          paths = [
+              Path('components/fury-ring.native.tsx'),
+              Path('components/fury-ring.web.tsx'),
+          ]
+
+          for path in paths:
+              s = path.read_text()
+
+              if 'NORMAL_BONUS_SPEEDUP_CHANCE' not in s:
+                  s = s.replace(
+                      'const SPECIAL_BALL_BONUS = 10;\n',
+                      'const SPECIAL_BALL_BONUS = 10;\n'
+                      'const NORMAL_BONUS_SPEEDUP_CHANCE = 0.25;\n'
+                      'const NORMAL_BONUS_SPEEDUP_MULTIPLIER = 0.5;\n'
+                      'const FURY_BONUS_SLOW_CHANCE = 0.5;\n'
+                      'const EXTREME_FURY_BONUS_SLOW_CHANCE = 0.8;\n'
+                      'const BONUS_SLOW_MULTIPLIER = 2;\n'
+                  )
+              else:
+                  s = s.replace(
+                      'const FURY_BONUS_SLOW_MULTIPLIER = 2;\n'
+                      'const EXTREME_FURY_BONUS_SLOW_MULTIPLIER = 5;\n',
+                      'const FURY_BONUS_SLOW_CHANCE = 0.5;\n'
+                      'const EXTREME_FURY_BONUS_SLOW_CHANCE = 0.8;\n'
+                      'const BONUS_SLOW_MULTIPLIER = 2;\n'
+                  )
+
+              helper_old = '''function getBonusDurationMultiplier(difficulty: FuryDifficulty) {\n  if (difficulty === "fury") return FURY_BONUS_SLOW_MULTIPLIER;\n  if (difficulty === "extreme-fury") return EXTREME_FURY_BONUS_SLOW_MULTIPLIER;\n  return Math.random() < NORMAL_BONUS_SPEEDUP_CHANCE\n    ? NORMAL_BONUS_SPEEDUP_MULTIPLIER\n    : 1;\n}\n'''
+              helper_new = '''function getBonusDurationMultiplier(difficulty: FuryDifficulty) {\n  if (difficulty === "fury") {\n    return Math.random() < FURY_BONUS_SLOW_CHANCE ? BONUS_SLOW_MULTIPLIER : 1;\n  }\n  if (difficulty === "extreme-fury") {\n    return Math.random() < EXTREME_FURY_BONUS_SLOW_CHANCE ? BONUS_SLOW_MULTIPLIER : 1;\n  }\n  return Math.random() < NORMAL_BONUS_SPEEDUP_CHANCE\n    ? NORMAL_BONUS_SPEEDUP_MULTIPLIER\n    : 1;\n}\n'''
+
+              if helper_old in s:
+                  s = s.replace(helper_old, helper_new)
+              elif 'function getBonusDurationMultiplier' not in s:
+                  marker = 'function createProjectile(\n'
+                  s = s.replace(marker, helper_new + '\n' + marker)
+
+              old_duration = 'duration: baseDuration * (slow ? SLOW_BALL_DURATION_MULTIPLIER : 1),'
+              if old_duration in s:
+                  s = s.replace(
+                      '  const baseDuration = randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs);\n\n  return {',
+                      '  const baseDuration = randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs);\n'
+                      '  const durationMultiplier =\n'
+                      '    kind === "bonus"\n'
+                      '      ? getBonusDurationMultiplier(difficulty)\n'
+                      '      : slow\n'
+                      '        ? SLOW_BALL_DURATION_MULTIPLIER\n'
+                      '        : 1;\n\n'
+                      '  return {'
+                  )
+                  s = s.replace(old_duration, 'duration: baseDuration * durationMultiplier,')
+
+              path.write_text(s)
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/fury-ring.native.tsx components/fury-ring.web.tsx
+          git commit -m "Fix bonus ball speed probabilities" || exit 0
+          git push
