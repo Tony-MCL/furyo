@@ -22,6 +22,7 @@ import {
   FURY_DIFFICULTIES,
   type FuryDifficulty,
 } from "./fury-difficulty";
+import { strings } from "./i18n";
 
 const SIZE = 79;
 const CENTER = SIZE / 2;
@@ -628,10 +629,10 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     >
       {!gameOver && (
         <>
-          <Text pointerEvents="none" style={styles.scoreText}>Score: {score}</Text>
+          <Text pointerEvents="none" style={styles.scoreText}>{strings.score}: {score}</Text>
           <Text pointerEvents="none" style={styles.difficultyText}>{difficultyConfig.label}</Text>
           <Text pointerEvents="none" style={styles.reviveStatusText}>
-            REVIVES {reviveCount}/{MAX_REVIVES}{reviveUsed ? " · USED THIS ROUND" : reviveCount > 0 ? " · READY" : " · EMPTY"}
+            {strings.revives} {reviveCount}/{MAX_REVIVES}{reviveUsed ? ` · ${strings.usedThisRound}` : reviveCount > 0 ? ` · ${strings.ready}` : ` · ${strings.empty}`}
           </Text>
         </>
       )}
@@ -661,24 +662,24 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
           +{EATEN_BALL_BONUS}
         </Animated.Text>
         <Animated.View style={[styles.reviveGlow, { opacity: reviveFeedback }]} />
-        <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>REVIVE!</Animated.Text>
+        <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>{strings.revive}</Animated.Text>
       </Animated.View>
 
       {gameOver && (
         <View style={styles.gameOverOverlay}>
           <View style={styles.gameOverScoreRow}>
-            <Text style={styles.gameOverScoreText}>Score: {finalScore}</Text>
-            <Text style={styles.gameOverHighScoreText}>High Score: {highScore}</Text>
+            <Text style={styles.gameOverScoreText}>{strings.score}: {finalScore}</Text>
+            <Text style={styles.gameOverHighScoreText}>{strings.highScore}: {highScore}</Text>
           </View>
 
           <Image source={{ uri: "/fury-game-over.svg" }} resizeMode="contain" style={styles.gameOverArtwork} />
 
           <Pressable style={styles.playAgainButton} onPress={restartGame}>
-            <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
+            <Text style={styles.playAgainButtonText}>{strings.playAgain}</Text>
           </Pressable>
 
           <Pressable style={styles.homeButton} onPress={onHome}>
-            <Text style={styles.homeButtonText}>HJEM</Text>
+            <Text style={styles.homeButtonText}>{strings.home}</Text>
           </Pressable>
         </View>
       )}
