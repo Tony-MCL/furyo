@@ -14,6 +14,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import FuryArtwork from "../components/fury-artwork";
 import FuryRing from "../components/fury-ring";
+import GameBanner from "../components/game-banner";
 import {
   FURY_DIFFICULTIES,
   FURY_DIFFICULTY_ORDER,
@@ -151,6 +152,7 @@ export default function Page() {
     return (
       <View style={styles.playShell}>
         <FuryRing difficulty={difficulty} onGameOver={handleGameOver} />
+        <GameBanner />
         {gameOverTransitioning && gameOverResult && (
           <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
             <Animated.View
