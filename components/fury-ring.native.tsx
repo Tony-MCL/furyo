@@ -7,10 +7,8 @@ import React, {
 import {
   Animated,
   Easing,
-  Image,
   ImageBackground,
   PanResponder,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -62,9 +60,15 @@ const sessionHighScores: Record<FuryDifficulty, number> = {
   "extreme-fury": 0,
 };
 
+export type FuryGameOverResult = {
+  difficulty: FuryDifficulty;
+  score: number;
+  highScore: number;
+};
+
 type FuryRingProps = {
   difficulty: FuryDifficulty;
-  onHome?: () => void;
+  onGameOver: (result: FuryGameOverResult) => void;
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
@@ -273,10 +277,10 @@ function SpawnBall({
     const listenerId = progress.addListener(({ value }) => {
       if (resolvedRef.current) return;
       const ring = getRingState();
-      if (ring.gameOver) return;
-
       const x = ball.startX + (ball.endX - ball.startX) * value;
       const y = ball.startY + (ball.endY - ball.startY) * value;
+
+      if (ring.gameOver) return;
 
       if (getBallDistanceFromRingCenter(x, y, ring) < COLLISION_INNER_RADIUS) {
         resolvedRef.current = true;
@@ -333,15 +337,13 @@ function createRingPath() {
     width: diameter,
     height: diameter,
   };
-  const startAngle = GAP_SIZE_DEGREES / 2;
-  const sweepAngle = 360 - GAP_SIZE_DEGREES;
-  path.addArc(rect, startAngle, sweepAngle);
+  path.addArc(rect, GAP_SIZE_DEGREES / 2, 360 - GAP_SIZE_DEGREES);
   return path;
 }
 
 const ringPath = createRingPath();
 
-export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
+export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const difficultyConfig = FURY_DIFFICULTIES[difficulty];
 
@@ -354,10 +356,8 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const directionRef = useRef(1);
   const lastTimestampRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
-
   const ringYRef = useRef(0);
   const dragStartYRef = useRef(0);
-  const maxDragDistanceRef = useRef(0);
   const windowHeightRef = useRef(windowHeight);
   const nextBallIdRef = useRef(1);
   const gameOverRef = useRef(false);
@@ -368,11 +368,8 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   const invulnerableUntilRef = useRef(0);
 
   const [balls, setBalls] = useState<BallData[]>([]);
-  const [gameOver, setGameOver] = useState(false);
   const [survivalPoints, setSurvivalPoints] = useState(0);
   const [bonusPoints, setBonusPoints] = useState(0);
-  const [finalScore, setFinalScore] = useState(0);
-  const [highScore, setHighScore] = useState(sessionHighScores[difficulty]);
   const [reviveUsed, setReviveUsed] = useState(false);
   const [reviveCount, setReviveCount] = useState(0);
 
@@ -382,7 +379,6 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
 
   useEffect(() => {
     let cancelled = false;
-
     const loadHighScore = async () => {
       try {
         const storageKey = getHighScoreStorageKey(difficulty);
@@ -394,72 +390,53 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
         if (storedValue === null || cancelled) return;
         const storedHighScore = Number.parseInt(storedValue, 10);
         if (!Number.isFinite(storedHighScore) || storedHighScore < 0) return;
-        sessionHighScores[difficulty] = Math.max(
-          sessionHighScores[difficulty],
-          storedHighScore,
-        );
-        setHighScore(sessionHighScores[difficulty]);
+        sessionHighScores[difficulty] = Math.max(sessionHighScores[difficulty], storedHighScore);
       } catch {}
     };
-
     loadHighScore();
     return () => { cancelled = true; };
   }, [difficulty]);
 
   useEffect(() => {
     let cancelled = false;
-
     const loadRevives = async () => {
       try {
         const storedValue = await AsyncStorage.getItem(REVIVE_STORAGE_KEY);
         let nextCount = TEST_START_REVIVES;
-
         if (storedValue !== null) {
           const parsed = Number.parseInt(storedValue, 10);
-          if (Number.isFinite(parsed)) {
-            nextCount = clamp(parsed, 0, MAX_REVIVES);
-          }
+          if (Number.isFinite(parsed)) nextCount = clamp(parsed, 0, MAX_REVIVES);
         } else {
           await AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextCount));
         }
-
         if (!cancelled) {
           reviveCountRef.current = nextCount;
           setReviveCount(nextCount);
         }
-      } catch {
-        if (!cancelled) {
-          reviveCountRef.current = TEST_START_REVIVES;
-          setReviveCount(TEST_START_REVIVES);
-        }
-      }
+      } catch {}
     };
-
     loadRevives();
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (gameOver) return;
-    const updateSurvivalPoints = () => {
-      setSurvivalPoints(Math.floor((Date.now() - runStartTimeRef.current) / 1000));
-    };
-    updateSurvivalPoints();
-    const interval = setInterval(updateSurvivalPoints, 200);
+    const interval = setInterval(() => {
+      if (!gameOverRef.current) {
+        setSurvivalPoints(Math.floor((Date.now() - runStartTimeRef.current) / 1000));
+      }
+    }, 200);
     return () => clearInterval(interval);
-  }, [gameOver]);
+  }, []);
 
   useEffect(() => {
     const animate = (timestamp: number) => {
-      if (!gameOverRef.current) {
-        if (lastTimestampRef.current !== null) {
-          const deltaMs = timestamp - lastTimestampRef.current;
-          angleRef.current =
-            (angleRef.current + directionRef.current * DEGREES_PER_MS * deltaMs + 360) % 360;
-          rotation.setValue(angleRef.current);
-        }
-        lastTimestampRef.current = timestamp;
+      if (lastTimestampRef.current !== null) {
+        const deltaMs = timestamp - lastTimestampRef.current;
+        angleRef.current =
+          (angleRef.current + directionRef.current * DEGREES_PER_MS * deltaMs + 360) % 360;
+        rotation.setValue(angleRef.current);
       }
+      lastTimestampRef.current = timestamp;
       frameRef.current = requestAnimationFrame(animate);
     };
     frameRef.current = requestAnimationFrame(animate);
@@ -469,10 +446,9 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   }, [rotation]);
 
   useEffect(() => {
-    if (windowWidth <= 0 || windowHeight <= 0 || gameOver) return;
+    if (windowWidth <= 0 || windowHeight <= 0) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const spawnAndSchedule = () => {
-      if (gameOverRef.current) return;
       const elapsedMs = Date.now() - runStartTimeRef.current;
       const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
       const spawnInterval = getSpawnInterval(elapsedMs, difficulty);
@@ -488,7 +464,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
     return () => {
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [difficulty, gameOver, windowHeight, windowWidth]);
+  }, [difficulty, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
@@ -515,6 +491,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
   }, [reviveFeedback]);
 
   const handleEaten = useCallback((id: number) => {
+    if (gameOverRef.current) return;
     removeBall(id);
     setBonusPoints((current) => current + EATEN_BALL_BONUS);
     showBonusFeedback();
@@ -533,7 +510,6 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
       reviveCountRef.current = nextReviveCount;
       setReviveCount(nextReviveCount);
       void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
-
       reviveUsedRef.current = true;
       setReviveUsed(true);
       invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
@@ -544,45 +520,14 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
 
     const currentScore = scoreRef.current;
     const previousHighScore = sessionHighScores[difficulty];
-    sessionHighScores[difficulty] = Math.max(previousHighScore, currentScore);
-    setFinalScore(currentScore);
-    setHighScore(sessionHighScores[difficulty]);
-    if (sessionHighScores[difficulty] > previousHighScore) {
-      void AsyncStorage.setItem(
-        getHighScoreStorageKey(difficulty),
-        String(sessionHighScores[difficulty]),
-      ).catch(() => {});
+    const nextHighScore = Math.max(previousHighScore, currentScore);
+    sessionHighScores[difficulty] = nextHighScore;
+    if (nextHighScore > previousHighScore) {
+      void AsyncStorage.setItem(getHighScoreStorageKey(difficulty), String(nextHighScore)).catch(() => {});
     }
     gameOverRef.current = true;
-    setGameOver(true);
-  }, [difficulty, removeBall, showReviveFeedback]);
-
-  const restartGame = useCallback(() => {
-    setBalls([]);
-    setSurvivalPoints(0);
-    setBonusPoints(0);
-    setFinalScore(0);
-    setReviveUsed(false);
-    bonusFeedback.stopAnimation();
-    bonusFeedback.setValue(0);
-    reviveFeedback.stopAnimation();
-    reviveFeedback.setValue(0);
-
-    nextBallIdRef.current = 1;
-    runStartTimeRef.current = Date.now();
-    ringYRef.current = 0;
-    dragStartYRef.current = 0;
-    maxDragDistanceRef.current = 0;
-    translateY.setValue(0);
-    angleRef.current = 0;
-    directionRef.current = 1;
-    lastTimestampRef.current = null;
-    rotation.setValue(0);
-    reviveUsedRef.current = false;
-    invulnerableUntilRef.current = 0;
-    gameOverRef.current = false;
-    setGameOver(false);
-  }, [bonusFeedback, reviveFeedback, rotation, translateY]);
+    onGameOver({ difficulty, score: currentScore, highScore: nextHighScore });
+  }, [difficulty, onGameOver, removeBall, showReviveFeedback]);
 
   const getRingState = useCallback(
     (): RingState => ({ y: ringYRef.current, angle: angleRef.current, gameOver: gameOverRef.current }),
@@ -604,12 +549,9 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
       onMoveShouldSetPanResponderCapture: () => !gameOverRef.current,
       onPanResponderGrant: () => {
         dragStartYRef.current = ringYRef.current;
-        maxDragDistanceRef.current = 0;
       },
       onPanResponderMove: (_event, gestureState) => {
         if (gameOverRef.current) return;
-        const dragDistance = Math.hypot(gestureState.dx, gestureState.dy);
-        maxDragDistanceRef.current = Math.max(maxDragDistanceRef.current, dragDistance);
         const verticalLimit = getVerticalLimit();
         const nextY = clamp(dragStartYRef.current + gestureState.dy, -verticalLimit, verticalLimit);
         ringYRef.current = nextY;
@@ -617,10 +559,6 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
       },
       onPanResponderRelease: () => {
         if (!gameOverRef.current) reverseDirection();
-        maxDragDistanceRef.current = 0;
-      },
-      onPanResponderTerminate: () => {
-        maxDragDistanceRef.current = 0;
       },
       onShouldBlockNativeResponder: () => true,
     }),
@@ -636,15 +574,11 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
       style={styles.container}
       {...panResponder.panHandlers}
     >
-      {!gameOver && (
-        <>
-          <Text pointerEvents="none" style={styles.scoreText}>{strings.score}: {score}</Text>
-          <Text pointerEvents="none" style={styles.difficultyText}>{difficultyConfig.label}</Text>
-          <Text pointerEvents="none" style={styles.reviveStatusText}>
-            {strings.revives} {reviveCount}/{MAX_REVIVES}{reviveUsed ? ` · ${strings.usedThisRound}` : reviveCount > 0 ? ` · ${strings.ready}` : ` · ${strings.empty}`}
-          </Text>
-        </>
-      )}
+      <Text pointerEvents="none" style={styles.scoreText}>{strings.score}: {score}</Text>
+      <Text pointerEvents="none" style={styles.difficultyText}>{difficultyConfig.label}</Text>
+      <Text pointerEvents="none" style={styles.reviveStatusText}>
+        {strings.revives} {reviveCount}/{MAX_REVIVES}{reviveUsed ? ` · ${strings.usedThisRound}` : reviveCount > 0 ? ` · ${strings.ready}` : ` · ${strings.empty}`}
+      </Text>
 
       {balls.map((ball) => (
         <SpawnBall key={ball.id} ball={ball} getRingState={getRingState} onCollision={handleCollision} onEaten={handleEaten} onDone={removeBall} />
@@ -669,29 +603,6 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
         <Animated.View style={[styles.reviveGlow, { opacity: reviveFeedback }]} />
         <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>{strings.revive}</Animated.Text>
       </Animated.View>
-
-      {gameOver && (
-        <View style={styles.gameOverOverlay}>
-          <View style={styles.gameOverScoreRow}>
-            <Text style={styles.gameOverScoreText}>{strings.score}: {finalScore}</Text>
-            <Text style={styles.gameOverHighScoreText}>{strings.highScore}: {highScore}</Text>
-          </View>
-
-          <Image
-            source={require("../public/fury-game-over.png")}
-            resizeMode="contain"
-            style={styles.gameOverArtwork}
-          />
-
-          <Pressable style={styles.playAgainButton} onPress={restartGame}>
-            <Text style={styles.playAgainButtonText}>{strings.playAgain}</Text>
-          </Pressable>
-
-          <Pressable style={styles.homeButton} onPress={onHome}>
-            <Text style={styles.homeButtonText}>{strings.home}</Text>
-          </Pressable>
-        </View>
-      )}
     </ImageBackground>
   );
 }
@@ -783,74 +694,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     letterSpacing: 1.3,
-  },
-  gameOverOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(2,5,13,0.94)",
-    paddingHorizontal: 22,
-    paddingVertical: 34,
-  },
-  gameOverScoreRow: {
-    width: "100%",
-    maxWidth: 520,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  gameOverScoreText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: RING_COLOR,
-    fontVariant: ["tabular-nums"],
-  },
-  gameOverHighScoreText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: BALL_COLOR,
-    fontVariant: ["tabular-nums"],
-  },
-  gameOverArtwork: {
-    width: "100%",
-    maxWidth: 620,
-    height: 280,
-    marginBottom: 28,
-    zIndex: 25,
-  },
-  playAgainButton: {
-    width: "82%",
-    maxWidth: 340,
-    minHeight: 62,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    backgroundColor: RING_COLOR,
-    paddingHorizontal: 24,
-  },
-  playAgainButtonText: {
-    color: "#08111f",
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-  },
-  homeButton: {
-    marginTop: 18,
-    minWidth: 146,
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: BALL_COLOR,
-    paddingHorizontal: 26,
-  },
-  homeButtonText: {
-    color: TEXT_COLOR,
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 1,
   },
 });
