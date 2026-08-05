@@ -25,6 +25,12 @@
       "package": "com.morningcoffeelabs.furyo"
     },
     "name": "furyo",
-    "slug": "furyo"
+    "slug": "furyo",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0962f1fd-7c6f-406e-b540-776e5178c4cb"
+      }
+    }
   }
 }
