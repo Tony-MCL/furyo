@@ -7,6 +7,7 @@ import React, {
 import {
   Animated,
   Easing,
+  Image,
   ImageBackground,
   PanResponder,
   Pressable,
@@ -17,7 +18,6 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
-import FuryArtwork from "./fury-artwork";
 import {
   FURY_DIFFICULTIES,
   type FuryDifficulty,
@@ -678,7 +678,11 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
             <Text style={styles.gameOverHighScoreText}>High Score: {highScore}</Text>
           </View>
 
-          <FuryArtwork kind="game-over" style={styles.gameOverArtwork} />
+          <Image
+            source={require("../public/fury-game-over.png")}
+            resizeMode="contain"
+            style={styles.gameOverArtwork}
+          />
 
           <Pressable style={styles.playAgainButton} onPress={restartGame}>
             <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
@@ -815,6 +819,7 @@ const styles = StyleSheet.create({
     maxWidth: 620,
     height: 280,
     marginBottom: 28,
+    zIndex: 25,
   },
   playAgainButton: {
     width: "82%",
