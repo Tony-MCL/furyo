@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Image,
   ImageBackground,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FuryArtwork from "../components/fury-artwork";
 import FuryRing from "../components/fury-ring";
 import {
   FURY_DIFFICULTIES,
@@ -21,6 +22,10 @@ import {
 
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const MAX_REVIVES = 3;
+const NIGHT_SKY_SOURCE =
+  Platform.OS === "web"
+    ? { uri: "/nightsky.png" }
+    : require("../public/nightsky.png");
 
 export default function Page() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -98,7 +103,7 @@ export default function Page() {
   if (showInfo) {
     return (
       <ImageBackground
-        source={{ uri: "/nightsky.png" }}
+        source={NIGHT_SKY_SOURCE}
         resizeMode="cover"
         style={styles.container}
       >
@@ -107,11 +112,7 @@ export default function Page() {
         </Pressable>
 
         <View style={styles.infoContent}>
-          <Image
-            source={{ uri: "/fury-logo.svg" }}
-            resizeMode="contain"
-            style={styles.infoLogo}
-          />
+          <FuryArtwork kind="logo" style={styles.infoLogo} />
 
           <Text style={styles.infoTitle}>INFO</Text>
 
@@ -119,8 +120,8 @@ export default function Page() {
             Flytt ringen. Kontroller åpningen. Overlev så lenge du kan.
           </Text>
           <Text style={styles.infoText}>
-            Dra opp og ned for å flytte ringen, og trykk for å snu
-            rotasjonsretningen.
+            Dra opp og ned for å flytte ringen. Når du slipper fingeren,
+            snur ringen rotasjonsretning.
           </Text>
           <Text style={styles.infoText}>
             Spis vanlige baller gjennom åpningen for bonuspoeng — men ikke bli
@@ -150,7 +151,7 @@ export default function Page() {
 
   return (
     <ImageBackground
-      source={{ uri: "/nightsky.png" }}
+      source={NIGHT_SKY_SOURCE}
       resizeMode="cover"
       style={styles.container}
     >
@@ -159,11 +160,7 @@ export default function Page() {
       </Pressable>
 
       <View style={styles.content}>
-        <Image
-          source={{ uri: "/fury-logo.svg" }}
-          resizeMode="contain"
-          style={styles.logo}
-        />
+        <FuryArtwork kind="logo" style={styles.logo} />
 
         <View style={styles.revivePanel}>
           <Text style={styles.reviveCount}>REVIVES {revives}/{MAX_REVIVES}</Text>
