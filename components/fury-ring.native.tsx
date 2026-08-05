@@ -186,7 +186,7 @@ function getPointOnEdge(
       return {
         x: isSpawnPoint
           ? getRandomVerticalSpawnX(width)
-          : randomBetween(excludedHalfWidth, halfWidth),
+          : randomBetween(-halfWidth, halfWidth),
         y: halfHeight + outside,
       };
     case "left":
