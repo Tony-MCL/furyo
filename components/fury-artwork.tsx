@@ -38,12 +38,18 @@ export default function FuryArtwork({ kind, style }: FuryArtworkProps) {
     );
   }
 
+  const resolvedAsset = Image.resolveAssetSource(NATIVE_ASSETS[kind]);
+
+  if (!resolvedAsset?.uri) {
+    return <View style={style} />;
+  }
+
   return (
     <View style={style}>
       <SvgUri
         width="100%"
         height="100%"
-        uri={NATIVE_ASSETS[kind] as unknown as string}
+        uri={resolvedAsset.uri}
       />
     </View>
   );
