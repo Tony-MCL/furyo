@@ -84,6 +84,7 @@ type RingState = {
   y: number;
   angle: number;
   gameOver: boolean;
+  paused: boolean;
 };
 
 const circumference = 2 * Math.PI * RADIUS;
@@ -261,6 +262,7 @@ function ballHitsRing(ballX: number, ballY: number, ring: RingState) {
 
 type SpawnBallProps = {
   ball: BallData;
+  paused: boolean;
   getRingState: () => RingState;
   onCollision: (id: number) => void;
   onEaten: (id: number) => void;
@@ -269,6 +271,7 @@ type SpawnBallProps = {
 
 function SpawnBall({
   ball,
+  paused,
   getRingState,
   onCollision,
   onEaten,
@@ -276,12 +279,15 @@ function SpawnBall({
 }: SpawnBallProps) {
   const progress = useRef(new Animated.Value(0)).current;
   const resolvedRef = useRef(false);
+  const progressValueRef = useRef(0);
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     const listenerId = progress.addListener(({ value }) => {
+      progressValueRef.current = value;
       if (resolvedRef.current) return;
       const ring = getRingState();
-      if (ring.gameOver) return;
+      if (ring.gameOver || ring.paused) return;
 
       const x = ball.startX + (ball.endX - ball.startX) * value;
       const y = ball.startY + (ball.endY - ball.startY) * value;
@@ -298,22 +304,34 @@ function SpawnBall({
       }
     });
 
+    return () => {
+      progress.removeListener(listenerId);
+    };
+  }, [ball, getRingState, onCollision, onEaten, progress]);
+
+  useEffect(() => {
+    animationRef.current?.stop();
+    animationRef.current = null;
+
+    if (paused || resolvedRef.current) return;
+
+    const remaining = Math.max(0, 1 - progressValueRef.current);
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: ball.duration,
+      duration: Math.max(1, ball.duration * remaining),
       easing: Easing.linear,
       useNativeDriver: false,
     });
+    animationRef.current = animation;
 
     animation.start(({ finished }) => {
       if (finished && !resolvedRef.current) onDone(ball.id);
     });
 
     return () => {
-      progress.removeListener(listenerId);
       animation.stop();
     };
-  }, [ball, getRingState, onCollision, onDone, onEaten, progress]);
+  }, [ball.duration, ball.id, onDone, paused, progress]);
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],
@@ -356,16 +374,71 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const reviveUsedRef = useRef(false);
   const reviveCountRef = useRef(0);
   const invulnerableUntilRef = useRef(0);
+  const pausedRef = useRef(false);
+  const pauseStartedAtRef = useRef<number | null>(null);
+  const totalPausedMsRef = useRef(0);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [survivalPoints, setSurvivalPoints] = useState(0);
   const [bonusPoints, setBonusPoints] = useState(0);
   const [reviveUsed, setReviveUsed] = useState(false);
   const [reviveCount, setReviveCount] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   windowHeightRef.current = windowHeight;
   const score = survivalPoints + bonusPoints;
   scoreRef.current = score;
+
+  const getActiveElapsedMs = useCallback(() => {
+    const currentPauseMs =
+      pausedRef.current && pauseStartedAtRef.current !== null
+        ? Date.now() - pauseStartedAtRef.current
+        : 0;
+    return Math.max(
+      0,
+      Date.now() - runStartTimeRef.current - totalPausedMsRef.current - currentPauseMs,
+    );
+  }, []);
+
+  useEffect(() => {
+    const setPaused = (shouldPause: boolean) => {
+      if (shouldPause === pausedRef.current) return;
+
+      if (shouldPause) {
+        pausedRef.current = true;
+        pauseStartedAtRef.current = Date.now();
+        lastTimestampRef.current = null;
+        setIsPaused(true);
+        return;
+      }
+
+      if (pauseStartedAtRef.current !== null) {
+        totalPausedMsRef.current += Date.now() - pauseStartedAtRef.current;
+      }
+      pauseStartedAtRef.current = null;
+      pausedRef.current = false;
+      lastTimestampRef.current = null;
+      setIsPaused(false);
+    };
+
+    const updateFromVisibility = () => {
+      setPaused(document.hidden || !document.hasFocus());
+    };
+
+    const handleBlur = () => setPaused(true);
+    const handleFocus = () => updateFromVisibility();
+
+    updateFromVisibility();
+    document.addEventListener("visibilitychange", updateFromVisibility);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", updateFromVisibility);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -411,15 +484,21 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!gameOverRef.current) {
-        setSurvivalPoints(Math.floor((Date.now() - runStartTimeRef.current) / 1000));
+      if (!gameOverRef.current && !pausedRef.current) {
+        setSurvivalPoints(Math.floor(getActiveElapsedMs() / 1000));
       }
     }, 200);
     return () => clearInterval(interval);
-  }, []);
+  }, [getActiveElapsedMs]);
 
   useEffect(() => {
     const animate = (timestamp: number) => {
+      if (pausedRef.current) {
+        lastTimestampRef.current = null;
+        frameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (lastTimestampRef.current !== null) {
         const deltaMs = timestamp - lastTimestampRef.current;
         angleRef.current =
@@ -439,7 +518,12 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     if (windowWidth <= 0 || windowHeight <= 0) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const spawnAndSchedule = () => {
-      const elapsedMs = Date.now() - runStartTimeRef.current;
+      if (pausedRef.current) {
+        timeoutId = setTimeout(spawnAndSchedule, 100);
+        return;
+      }
+
+      const elapsedMs = getActiveElapsedMs();
       const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
       const spawnInterval = getSpawnInterval(elapsedMs, difficulty);
       setBalls((currentBalls) => {
@@ -454,7 +538,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     return () => {
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
-  }, [difficulty, windowHeight, windowWidth]);
+  }, [difficulty, getActiveElapsedMs, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
@@ -481,14 +565,14 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   }, [reviveFeedback]);
 
   const handleEaten = useCallback((id: number) => {
-    if (gameOverRef.current) return;
+    if (gameOverRef.current || pausedRef.current) return;
     removeBall(id);
     setBonusPoints((current) => current + EATEN_BALL_BONUS);
     showBonusFeedback();
   }, [removeBall, showBonusFeedback]);
 
   const handleCollision = useCallback((id: number) => {
-    if (gameOverRef.current) return;
+    if (gameOverRef.current || pausedRef.current) return;
 
     if (Date.now() < invulnerableUntilRef.current) {
       removeBall(id);
@@ -520,12 +604,17 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   }, [difficulty, onGameOver, removeBall, showReviveFeedback]);
 
   const getRingState = useCallback(
-    (): RingState => ({ y: ringYRef.current, angle: angleRef.current, gameOver: gameOverRef.current }),
+    (): RingState => ({
+      y: ringYRef.current,
+      angle: angleRef.current,
+      gameOver: gameOverRef.current,
+      paused: pausedRef.current,
+    }),
     [],
   );
 
   const reverseDirection = () => {
-    if (!gameOverRef.current) directionRef.current *= -1;
+    if (!gameOverRef.current && !pausedRef.current) directionRef.current *= -1;
   };
 
   const getVerticalLimit = () =>
@@ -533,16 +622,16 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !gameOverRef.current,
-      onStartShouldSetPanResponderCapture: () => !gameOverRef.current,
-      onMoveShouldSetPanResponder: () => !gameOverRef.current,
-      onMoveShouldSetPanResponderCapture: () => !gameOverRef.current,
+      onStartShouldSetPanResponder: () => !gameOverRef.current && !pausedRef.current,
+      onStartShouldSetPanResponderCapture: () => !gameOverRef.current && !pausedRef.current,
+      onMoveShouldSetPanResponder: () => !gameOverRef.current && !pausedRef.current,
+      onMoveShouldSetPanResponderCapture: () => !gameOverRef.current && !pausedRef.current,
       onPanResponderGrant: () => {
         dragStartYRef.current = ringYRef.current;
         maxDragDistanceRef.current = 0;
       },
       onPanResponderMove: (_event, gestureState) => {
-        if (gameOverRef.current) return;
+        if (gameOverRef.current || pausedRef.current) return;
         const dragDistance = Math.hypot(gestureState.dx, gestureState.dy);
         maxDragDistanceRef.current = Math.max(maxDragDistanceRef.current, dragDistance);
         const verticalLimit = getVerticalLimit();
@@ -551,7 +640,11 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         translateY.setValue(nextY);
       },
       onPanResponderRelease: () => {
-        if (!gameOverRef.current && maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD) {
+        if (
+          !gameOverRef.current &&
+          !pausedRef.current &&
+          maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD
+        ) {
           reverseDirection();
         }
       },
@@ -579,7 +672,15 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       </Text>
 
       {balls.map((ball) => (
-        <SpawnBall key={ball.id} ball={ball} getRingState={getRingState} onCollision={handleCollision} onEaten={handleEaten} onDone={removeBall} />
+        <SpawnBall
+          key={ball.id}
+          ball={ball}
+          paused={isPaused}
+          getRingState={getRingState}
+          onCollision={handleCollision}
+          onEaten={handleEaten}
+          onDone={removeBall}
+        />
       ))}
 
       <Animated.View pointerEvents="none" style={[styles.movementLayer, { transform: [{ translateY }] }]}>
