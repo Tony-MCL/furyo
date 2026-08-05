@@ -89,7 +89,7 @@ export default function Page() {
         AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(next)).catch(() => {});
         return next;
       });
-      setReviveMessage("+1 REVIVE");
+      setReviveMessage("");
     } catch {
       setReviveMessage(strings.adNotReady);
     } finally {
