@@ -7,6 +7,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-navigation-bar",
+        {
+          "visibility": "hidden",
+          "barStyle": "light",
+          "enforceContrast": false
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-7463440033205599~9693590947"
