@@ -44,6 +44,11 @@ const BONUS_COLOR = "#FFD166";
 
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
+const BOMB_SIZE = 18;
+const SLOW_BALL_CHANCE = 0.1;
+const SLOW_BALL_DURATION_MULTIPLIER = 2;
+const BOMB_MIN_INTERVAL_MS = 6000;
+const BOMB_MAX_INTERVAL_MS = 14000;
 const TOP_BOTTOM_CENTER_EXCLUSION_RATIO = 0.4;
 const EATEN_BALL_BONUS = 5;
 const LEGACY_HIGH_SCORE_STORAGE_KEY = "fury-o-high-score";
@@ -71,9 +76,12 @@ type FuryRingProps = {
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
+type ProjectileKind = "ball" | "bomb";
 
 type BallData = {
   id: number;
+  kind: ProjectileKind;
+  slow: boolean;
   startX: number;
   startY: number;
   endX: number;
@@ -172,7 +180,7 @@ function getPointOnEdge(
 ) {
   const halfWidth = width / 2;
   const halfHeight = height / 2;
-  const outside = BALL_SIZE * 2;
+  const outside = BOMB_SIZE * 2;
 
   switch (edge) {
     case "top":
@@ -202,25 +210,30 @@ function getPointOnEdge(
   }
 }
 
-function createBall(
+function createProjectile(
   id: number,
   width: number,
   height: number,
   difficulty: FuryDifficulty,
+  kind: ProjectileKind = "ball",
 ): BallData {
   const config = FURY_DIFFICULTIES[difficulty];
   const startEdge = getRandomEdge();
   const endEdge = getOppositeEdge(startEdge);
   const start = getPointOnEdge(startEdge, width, height, true);
   const end = getPointOnEdge(endEdge, width, height);
+  const slow = kind === "ball" && Math.random() < SLOW_BALL_CHANCE;
+  const baseDuration = randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs);
 
   return {
     id,
+    kind,
+    slow,
     startX: start.x,
     startY: start.y,
     endX: end.x,
     endY: end.y,
-    duration: randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs),
+    duration: baseDuration * (slow ? SLOW_BALL_DURATION_MULTIPLIER : 1),
   };
 }
 
@@ -260,7 +273,7 @@ type SpawnBallProps = {
   paused: boolean;
   getRingState: () => RingState;
   onCollision: (id: number) => void;
-  onEaten: (id: number) => void;
+  onEaten: (id: number, kind: ProjectileKind) => void;
   onDone: (id: number) => void;
 };
 
@@ -289,7 +302,7 @@ function SpawnBall({
 
       if (getBallDistanceFromRingCenter(x, y, ring) < COLLISION_INNER_RADIUS) {
         resolvedRef.current = true;
-        onEaten(ball.id);
+        onEaten(ball.id, ball.kind);
         return;
       }
 
@@ -336,6 +349,19 @@ function SpawnBall({
     inputRange: [0, 1],
     outputRange: [ball.startY, ball.endY],
   });
+
+  if (ball.kind === "bomb") {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.bomb, { transform: [{ translateX }, { translateY }] }]}
+      >
+        <View style={styles.bombFuse} />
+        <View style={styles.bombSpark} />
+        <View style={styles.bombShine} />
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View
@@ -567,8 +593,9 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       const maxActiveBalls = getMaxActiveBalls(elapsedMs, difficulty);
       const spawnInterval = getSpawnInterval(elapsedMs, difficulty);
       setBalls((currentBalls) => {
-        if (currentBalls.length >= maxActiveBalls) return currentBalls;
-        const ball = createBall(nextBallIdRef.current, windowWidth, windowHeight, difficulty);
+        const activeNormalBalls = currentBalls.filter((ball) => ball.kind === "ball").length;
+        if (activeNormalBalls >= maxActiveBalls) return currentBalls;
+        const ball = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, "ball");
         nextBallIdRef.current += 1;
         return [...currentBalls, ball];
       });
@@ -579,6 +606,33 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       if (timeoutId !== null) clearTimeout(timeoutId);
     };
   }, [difficulty, getActiveElapsedMs, windowHeight, windowWidth]);
+
+  useEffect(() => {
+    if (windowWidth <= 0 || windowHeight <= 0) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleBomb = () => {
+      const delay = randomBetween(BOMB_MIN_INTERVAL_MS, BOMB_MAX_INTERVAL_MS);
+      timeoutId = setTimeout(() => {
+        if (gameOverRef.current) return;
+        if (pausedRef.current) {
+          scheduleBomb();
+          return;
+        }
+        setBalls((currentBalls) => {
+          const bomb = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, "bomb");
+          nextBallIdRef.current += 1;
+          return [...currentBalls, bomb];
+        });
+        scheduleBomb();
+      }, delay);
+    };
+
+    scheduleBomb();
+    return () => {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
+  }, [difficulty, windowHeight, windowWidth]);
 
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
@@ -603,13 +657,6 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       Animated.timing(reviveFeedback, { toValue: 0, duration: 200, useNativeDriver: false }),
     ]).start();
   }, [reviveFeedback]);
-
-  const handleEaten = useCallback((id: number) => {
-    if (gameOverRef.current || pausedRef.current) return;
-    removeBall(id);
-    setBonusPoints((current) => current + EATEN_BALL_BONUS);
-    showBonusFeedback();
-  }, [removeBall, showBonusFeedback]);
 
   const handleCollision = useCallback((id: number) => {
     if (gameOverRef.current || pausedRef.current) return;
@@ -642,6 +689,17 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     gameOverRef.current = true;
     onGameOver({ difficulty, score: currentScore, highScore: nextHighScore });
   }, [difficulty, onGameOver, removeBall, showReviveFeedback]);
+
+  const handleEaten = useCallback((id: number, kind: ProjectileKind) => {
+    if (gameOverRef.current || pausedRef.current) return;
+    if (kind === "bomb") {
+      handleCollision(id);
+      return;
+    }
+    removeBall(id);
+    setBonusPoints((current) => current + EATEN_BALL_BONUS);
+    showBonusFeedback();
+  }, [handleCollision, removeBall, showBonusFeedback]);
 
   const getRingState = useCallback(
     (): RingState => ({
@@ -790,6 +848,47 @@ const styles = StyleSheet.create({
     marginTop: -BALL_SIZE / 2,
     borderRadius: BALL_SIZE / 2,
     backgroundColor: BALL_COLOR,
+  },
+  bomb: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: BOMB_SIZE,
+    height: BOMB_SIZE,
+    marginLeft: -BOMB_SIZE / 2,
+    marginTop: -BOMB_SIZE / 2,
+    borderRadius: BOMB_SIZE / 2,
+    backgroundColor: "#111827",
+    borderWidth: 2,
+    borderColor: "#FF8A00",
+  },
+  bombFuse: {
+    position: "absolute",
+    width: 3,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: "#FFD166",
+    right: -2,
+    top: -7,
+    transform: [{ rotate: "35deg" }],
+  },
+  bombSpark: {
+    position: "absolute",
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#FFB000",
+    right: -6,
+    top: -10,
+  },
+  bombShine: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(247,250,255,0.72)",
+    left: 3,
+    top: 3,
   },
   movementLayer: { width: CANVAS_SIZE, height: CANVAS_SIZE },
   ringSurface: { width: CANVAS_SIZE, height: CANVAS_SIZE },
