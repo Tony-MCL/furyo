@@ -32,6 +32,7 @@ const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
 const REVIVE_INVULNERABILITY_MS = 1000;
+const RESUME_COUNTDOWN_SECONDS = 3;
 const MAX_REVIVES = 3;
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const TEST_START_REVIVES = 3;
@@ -377,6 +378,8 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const pausedRef = useRef(false);
   const pauseStartedAtRef = useRef<number | null>(null);
   const totalPausedMsRef = useRef(0);
+  const resumeCountdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumeCountdownActiveRef = useRef(false);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [survivalPoints, setSurvivalPoints] = useState(0);
@@ -384,6 +387,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const [reviveUsed, setReviveUsed] = useState(false);
   const [reviveCount, setReviveCount] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [resumeCountdown, setResumeCountdown] = useState<number | null>(null);
 
   windowHeightRef.current = windowHeight;
   const score = survivalPoints + bonusPoints;
@@ -401,24 +405,60 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   }, []);
 
   useEffect(() => {
-    const setPaused = (shouldPause: boolean) => {
-      if (shouldPause === pausedRef.current) return;
-
-      if (shouldPause) {
-        pausedRef.current = true;
-        pauseStartedAtRef.current = Date.now();
-        lastTimestampRef.current = null;
-        setIsPaused(true);
-        return;
+    const clearResumeCountdown = () => {
+      if (resumeCountdownTimerRef.current !== null) {
+        clearTimeout(resumeCountdownTimerRef.current);
+        resumeCountdownTimerRef.current = null;
       }
+      resumeCountdownActiveRef.current = false;
+      setResumeCountdown(null);
+    };
 
+    const finishResume = () => {
       if (pauseStartedAtRef.current !== null) {
         totalPausedMsRef.current += Date.now() - pauseStartedAtRef.current;
       }
       pauseStartedAtRef.current = null;
       pausedRef.current = false;
       lastTimestampRef.current = null;
+      resumeCountdownTimerRef.current = null;
+      resumeCountdownActiveRef.current = false;
+      setResumeCountdown(null);
       setIsPaused(false);
+    };
+
+    const startResumeCountdown = () => {
+      if (!pausedRef.current || resumeCountdownActiveRef.current) return;
+      resumeCountdownActiveRef.current = true;
+      let nextValue = RESUME_COUNTDOWN_SECONDS;
+      setResumeCountdown(nextValue);
+
+      const tick = () => {
+        nextValue -= 1;
+        if (nextValue <= 0) {
+          finishResume();
+          return;
+        }
+        setResumeCountdown(nextValue);
+        resumeCountdownTimerRef.current = setTimeout(tick, 1000);
+      };
+
+      resumeCountdownTimerRef.current = setTimeout(tick, 1000);
+    };
+
+    const setPaused = (shouldPause: boolean) => {
+      if (shouldPause) {
+        clearResumeCountdown();
+        if (!pausedRef.current) {
+          pausedRef.current = true;
+          pauseStartedAtRef.current = Date.now();
+          lastTimestampRef.current = null;
+          setIsPaused(true);
+        }
+        return;
+      }
+
+      if (pausedRef.current) startResumeCountdown();
     };
 
     const updateFromVisibility = () => {
@@ -434,6 +474,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      clearResumeCountdown();
       document.removeEventListener("visibilitychange", updateFromVisibility);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
@@ -706,6 +747,12 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         <Animated.View style={[styles.reviveGlow, { opacity: reviveFeedback }]} />
         <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>{strings.revive}</Animated.Text>
       </Animated.View>
+
+      {resumeCountdown !== null && (
+        <View pointerEvents="none" style={styles.resumeCountdownOverlay}>
+          <Text style={styles.resumeCountdownText}>{resumeCountdown}</Text>
+        </View>
+      )}
     </ImageBackground>
   );
 }
@@ -799,5 +846,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     letterSpacing: 1.3,
+  },
+  resumeCountdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(2,5,13,0.32)",
+  },
+  resumeCountdownText: {
+    color: "#FFB000",
+    fontSize: 96,
+    lineHeight: 108,
+    fontWeight: "900",
+    textAlign: "center",
   },
 });
