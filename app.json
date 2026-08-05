@@ -22,8 +22,10 @@
       ]
     ],
     "android": {
-      "package": "com.morningcoffeelabs.furyo"
+      "package": "com.morningcoffeelabs.furyo",
+      "icon": "./public/fury-icon.png"
     },
+    "icon": "./public/fury-icon.png",
     "name": "furyo",
     "slug": "furyo",
     "extra": {
