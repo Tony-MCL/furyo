@@ -7,7 +7,6 @@ import React, {
 import {
   Animated,
   Easing,
-  Image,
   ImageBackground,
   PanResponder,
   Pressable,
@@ -18,6 +17,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
+import FuryArtwork from "./fury-artwork";
 import {
   FURY_DIFFICULTIES,
   type FuryDifficulty,
@@ -30,7 +30,6 @@ const RING_STROKE_WIDTH = 5;
 const GAP_SIZE_DEGREES = 75;
 const ROTATION_DURATION_MS = 5200;
 const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
-const TAP_MOVEMENT_THRESHOLD = 8;
 const EDGE_MARGIN = 16;
 const REVIVE_INVULNERABILITY_MS = 1000;
 const MAX_REVIVES = 3;
@@ -187,7 +186,7 @@ function getPointOnEdge(
       return {
         x: isSpawnPoint
           ? getRandomVerticalSpawnX(width)
-          : randomBetween(-halfWidth, halfWidth),
+          : randomBetween(excludedHalfWidth, halfWidth),
         y: halfHeight + outside,
       };
     case "left":
@@ -616,9 +615,10 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
         translateY.setValue(nextY);
       },
       onPanResponderRelease: () => {
-        if (!gameOverRef.current && maxDragDistanceRef.current < TAP_MOVEMENT_THRESHOLD) {
+        if (!gameOverRef.current) {
           reverseDirection();
         }
+        maxDragDistanceRef.current = 0;
       },
       onPanResponderTerminate: () => {
         maxDragDistanceRef.current = 0;
@@ -678,7 +678,7 @@ export default function FuryRing({ difficulty, onHome }: FuryRingProps) {
             <Text style={styles.gameOverHighScoreText}>High Score: {highScore}</Text>
           </View>
 
-          <Image source={require("../public/fury-game-over.svg")} resizeMode="contain" style={styles.gameOverArtwork} />
+          <FuryArtwork kind="game-over" style={styles.gameOverArtwork} />
 
           <Pressable style={styles.playAgainButton} onPress={restartGame}>
             <Text style={styles.playAgainButtonText}>SPILL IGJEN</Text>
@@ -785,10 +785,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.56)",
-    paddingHorizontal: 28,
-    paddingTop: 42,
-    paddingBottom: 28,
+    justifyContent: "center",
+    backgroundColor: "rgba(2,5,13,0.94)",
+    paddingHorizontal: 22,
+    paddingVertical: 34,
   },
   gameOverScoreRow: {
     width: "100%",
@@ -796,6 +796,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 20,
   },
   gameOverScoreText: {
     fontSize: 18,
@@ -810,16 +811,15 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   gameOverArtwork: {
-    width: "92%",
-    maxWidth: 560,
-    height: 210,
-    marginTop: 64,
-    marginBottom: 42,
+    width: "100%",
+    maxWidth: 620,
+    height: 280,
+    marginBottom: 28,
   },
   playAgainButton: {
-    width: "78%",
-    maxWidth: 320,
-    minHeight: 58,
+    width: "82%",
+    maxWidth: 340,
+    minHeight: 62,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
@@ -833,9 +833,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   homeButton: {
-    marginTop: 16,
-    minWidth: 132,
-    minHeight: 46,
+    marginTop: 18,
+    minWidth: 146,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
