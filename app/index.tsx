@@ -32,6 +32,7 @@ const MAX_REVIVES = 3;
 const GAME_OVER_TRANSITION_MS = 1000;
 const PRIVACY_POLICY_URL = "https://morningcoffeelabs.no/#/fury-o/privacy";
 const TERMS_OF_USE_URL = "https://morningcoffeelabs.no/#/fury-o/terms";
+const CONTACT_URL = "mailto:post@morningcoffeelabs.no";
 const NIGHT_SKY_SOURCE =
   Platform.OS === "web"
     ? { uri: "/nightsky.png" }
@@ -215,7 +216,10 @@ export default function Page() {
             >
               <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
             </Pressable>
-            <Pressable style={styles.infoLinkButton}>
+            <Pressable
+              style={styles.infoLinkButton}
+              onPress={() => void Linking.openURL(CONTACT_URL)}
+            >
               <Text style={styles.infoLinkText}>{strings.contact}</Text>
             </Pressable>
           </View>
