@@ -33,6 +33,7 @@ const GAME_OVER_TRANSITION_MS = 1000;
 const PRIVACY_POLICY_URL = "https://morningcoffeelabs.no/#/fury-o/privacy";
 const TERMS_OF_USE_URL = "https://morningcoffeelabs.no/#/fury-o/terms";
 const CONTACT_URL = "mailto:post@morningcoffeelabs.no";
+const COMMUNITY_URL = "https://www.facebook.com/groups/2506294439795765";
 const NIGHT_SKY_SOURCE =
   Platform.OS === "web"
     ? { uri: "/nightsky.png" }
@@ -206,6 +207,12 @@ export default function Page() {
           <View style={styles.infoLinks}>
             <Pressable
               style={styles.infoLinkButton}
+              onPress={() => void Linking.openURL(COMMUNITY_URL)}
+            >
+              <Text style={styles.infoLinkText}>{strings.communityButton}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.infoLinkButton}
               onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
             >
               <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
@@ -367,7 +374,7 @@ const styles = StyleSheet.create({
   infoText: { width: "100%", color: "#F7FAFF", fontSize: 16, lineHeight: 23, textAlign: "center", marginBottom: 13 },
   infoLinks: { width: "100%", marginTop: 24, alignItems: "center" },
   infoLinkButton: { width: "82%", maxWidth: 300, minHeight: 46, alignItems: "center", justifyContent: "center", borderBottomWidth: 1, borderBottomColor: "rgba(111,231,255,0.35)" },
-  infoLinkText: { color: "#6FE7FF", fontSize: 16, fontWeight: "700" },
+  infoLinkText: { color: "#6FE7FF", fontSize: 16, fontWeight: "700", textAlign: "center" },
   footer: { position: "absolute", bottom: 22, color: "rgba(247,250,255,0.72)", fontSize: 12 },
   gameOverScreen: { flex: 1, width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#02050d" },
   gameOverContent: { width: "100%", maxWidth: 620, alignItems: "center", paddingHorizontal: 24 },
