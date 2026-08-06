@@ -29,11 +29,12 @@ export type FuryStrings = {
 
 const EN: FuryStrings = {
   infoTitle: "INFO",
-  infoIntro: "Move the ring. Control the opening. Survive as long as you can.",
+  infoIntro:
+    "Survive as long as you can. You score points every second — and at the same time, the fury increases.",
   infoControls:
-    "Drag up and down to move the ring. When you release your finger, the ring reverses rotation.",
+    "Move the ring up and down. Release your finger to reverse its rotation and get the opening where you need it.",
   infoBonus:
-    "Eat normal balls through the opening for bonus points — but don't get too greedy.",
+    "Catch regular balls through the opening for +5 points, and hunt the rare +10 balls for an even bigger reward — but control your greed. Miss the opening and hit the ring, and your run is in danger.\n\nBombs are never your friends.\n\nStart the game and see how long you can survive Normal, Fury or Extreme Fury.",
   privacyPolicy: "Privacy Policy",
   termsOfUse: "Terms of Use",
   contact: "Contact",
@@ -58,11 +59,12 @@ const EN: FuryStrings = {
 
 const NO: FuryStrings = {
   infoTitle: "INFO",
-  infoIntro: "Flytt ringen. Kontroller åpningen. Overlev så lenge du kan.",
+  infoIntro:
+    "Overlev så lenge du kan. Du får poeng for hvert sekund — og samtidig øker raseriet.",
   infoControls:
-    "Dra opp og ned for å flytte ringen. Når du slipper fingeren, snur ringen rotasjonsretning.",
+    "Flytt ringen opp og ned. Slipp fingeren for å snu rotasjonsretningen og få åpningen dit du trenger den.",
   infoBonus:
-    "Spis vanlige baller gjennom åpningen for bonuspoeng — men ikke bli for grådig.",
+    "Fang vanlige baller gjennom åpningen for +5 poeng, og jakt på de sjeldne +10-ballene for enda større uttelling, men kontroller grådigheten. Bommer du på åpningen og treffer ringen, er runden i fare.\n\nBomber er aldri vennene dine.\n\nStart spillet og se hvor lenge du overlever Normal, Fury eller Extreme Fury.",
   privacyPolicy: "Personvern",
   termsOfUse: "Bruksvilkår",
   contact: "Kontakt",
