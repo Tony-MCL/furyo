@@ -1,9 +1,14 @@
+import { Platform } from "react-native";
 import mobileAds, {
   AdEventType,
   RewardedAd,
   RewardedAdEventType,
-  TestIds,
 } from "react-native-google-mobile-ads";
+
+const REWARDED_AD_UNIT_ID = Platform.select({
+  android: "ca-app-pub-7463440033205599/4716786385",
+  ios: "ca-app-pub-7463440033205599/1386659856",
+})!;
 
 let initialized = false;
 let rewarded: RewardedAd | null = null;
@@ -27,7 +32,7 @@ async function createLoadedRewardedAd() {
 
   if (!loadingPromise) {
     loadingPromise = new Promise<void>((resolve, reject) => {
-      const ad = RewardedAd.createForAdRequest(TestIds.REWARDED, {
+      const ad = RewardedAd.createForAdRequest(REWARDED_AD_UNIT_ID, {
         requestNonPersonalizedAdsOnly: true,
       });
 
