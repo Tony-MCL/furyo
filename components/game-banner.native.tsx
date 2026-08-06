@@ -1,16 +1,20 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import {
   BannerAd,
   BannerAdSize,
-  TestIds,
 } from "react-native-google-mobile-ads";
+
+const BANNER_AD_UNIT_ID = Platform.select({
+  android: "ca-app-pub-7463440033205599/7216505370",
+  ios: "ca-app-pub-7463440033205599/7945584957",
+})!;
 
 export default function GameBanner() {
   return (
     <View pointerEvents="box-none" style={styles.container}>
       <BannerAd
-        unitId={TestIds.BANNER}
+        unitId={BANNER_AD_UNIT_ID}
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
         requestOptions={{
           requestNonPersonalizedAdsOnly: true,
