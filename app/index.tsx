@@ -26,6 +26,10 @@ import {
   preloadRewardedRevive,
   showRewardedRevive,
 } from "../components/rewarded-revive";
+import {
+  initializeAdsConsent,
+  showPrivacyOptions,
+} from "../components/ad-consent";
 
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const MAX_REVIVES = 3;
@@ -59,6 +63,7 @@ export default function Page() {
   const [reviveMessage, setReviveMessage] = useState("");
   const [gameOverResult, setGameOverResult] = useState<GameOverResult | null>(null);
   const [gameOverTransitioning, setGameOverTransitioning] = useState(false);
+  const [adsReady, setAdsReady] = useState(Platform.OS === "web");
 
   const gameOverProgress = useRef(new Animated.Value(0)).current;
 
@@ -74,11 +79,28 @@ export default function Page() {
 
   useEffect(() => {
     loadRevives();
-    void preloadRewardedRevive();
+
+    if (Platform.OS === "web") {
+      return;
+    }
+
+    let active = true;
+
+    void initializeAdsConsent().then((ready) => {
+      if (!active) return;
+      setAdsReady(ready);
+      if (ready) {
+        void preloadRewardedRevive();
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, [loadRevives]);
 
   const earnRevive = useCallback(async () => {
-    if (earningRevive || revives >= MAX_REVIVES) return;
+    if (earningRevive || revives >= MAX_REVIVES || !adsReady) return;
 
     setEarningRevive(true);
     setReviveMessage("");
@@ -101,7 +123,20 @@ export default function Page() {
     } finally {
       setEarningRevive(false);
     }
-  }, [earningRevive, revives]);
+  }, [adsReady, earningRevive, revives]);
+
+  const handlePrivacyChoices = useCallback(async () => {
+    if (Platform.OS === "web") {
+      return;
+    }
+
+    await showPrivacyOptions();
+    const ready = await initializeAdsConsent();
+    setAdsReady(ready);
+    if (ready) {
+      void preloadRewardedRevive();
+    }
+  }, []);
 
   const handleGameOver = useCallback((result: GameOverResult) => {
     setGameOverResult(result);
@@ -157,7 +192,7 @@ export default function Page() {
     return (
       <View style={styles.playShell}>
         <FuryRing difficulty={difficulty} onGameOver={handleGameOver} />
-        <GameBanner />
+        {adsReady && <GameBanner />}
         {gameOverTransitioning && gameOverResult && (
           <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
             <Animated.View
@@ -217,6 +252,14 @@ export default function Page() {
             >
               <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
             </Pressable>
+            {Platform.OS !== "web" && (
+              <Pressable
+                style={styles.infoLinkButton}
+                onPress={() => void handlePrivacyChoices()}
+              >
+                <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
+              </Pressable>
+            )}
             <Pressable
               style={styles.infoLinkButton}
               onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
@@ -238,7 +281,7 @@ export default function Page() {
   }
 
   const reviveFull = revives >= MAX_REVIVES;
-  const earnDisabled = reviveFull || earningRevive;
+  const earnDisabled = reviveFull || earningRevive || !adsReady;
 
   return (
     <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.container}>

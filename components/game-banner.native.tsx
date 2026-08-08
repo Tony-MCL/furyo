@@ -4,6 +4,7 @@ import {
   BannerAd,
   BannerAdSize,
 } from "react-native-google-mobile-ads";
+import { canRequestAds } from "./ad-consent";
 
 const BANNER_AD_UNIT_ID = Platform.select({
   android: "ca-app-pub-7463440033205599/7216505370",
@@ -11,14 +12,15 @@ const BANNER_AD_UNIT_ID = Platform.select({
 })!;
 
 export default function GameBanner() {
+  if (!canRequestAds()) {
+    return null;
+  }
+
   return (
     <View pointerEvents="box-none" style={styles.container}>
       <BannerAd
         unitId={BANNER_AD_UNIT_ID}
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-        requestOptions={{
-          requestNonPersonalizedAdsOnly: true,
-        }}
       />
     </View>
   );

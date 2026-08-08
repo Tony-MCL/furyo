@@ -9,6 +9,7 @@ export type FuryStrings = {
   communityText: string;
   communityButton: string;
   privacyPolicy: string;
+  privacyChoices: string;
   termsOfUse: string;
   contact: string;
   revives: string;
@@ -42,6 +43,7 @@ const EN: FuryStrings = {
   communityText: "Share your high score, challenge other players and see how long others have survived.",
   communityButton: "JOIN THE FURY O COMMUNITY",
   privacyPolicy: "Privacy Policy",
+  privacyChoices: "Privacy choices",
   termsOfUse: "Terms of Use",
   contact: "Contact",
   revives: "REVIVES",
@@ -75,6 +77,7 @@ const NO: FuryStrings = {
   communityText: "Del rekorden din, utfordre andre spillere og se hvor lenge andre har overlevd.",
   communityButton: "BLI MED I FURY O-FELLESSKAPET",
   privacyPolicy: "Personvern",
+  privacyChoices: "Personvernvalg",
   termsOfUse: "Bruksvilkår",
   contact: "Kontakt",
   revives: "REVIVES",
