@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import FuryArtwork from "../components/fury-artwork";
-import FuryRing from "../components/fury-ring";
+import FuryRing, { type FuryReviveHandle } from "../components/fury-ring";
 import GameBanner from "../components/game-banner";
 import {
   FURY_DIFFICULTIES,
@@ -68,6 +68,7 @@ export default function Page() {
   const [adsReady, setAdsReady] = useState(Platform.OS === "web");
 
   const gameOverProgress = useRef(new Animated.Value(0)).current;
+  const reviveHandle = useRef<FuryReviveHandle | null>(null);
 
   const loadRevives = useCallback(async () => {
     try {
@@ -168,6 +169,18 @@ export default function Page() {
     setIsPlaying(true);
   }, [gameOverProgress]);
 
+  const useRevive = useCallback(() => {
+    const resumed = reviveHandle.current?.useRevive() ?? false;
+    if (!resumed) return;
+
+    gameOverProgress.stopAnimation();
+    gameOverProgress.setValue(0);
+    setGameOverResult(null);
+    setGameOverTransitioning(false);
+    setIsPlaying(true);
+    void loadRevives();
+  }, [gameOverProgress, loadRevives]);
+
   const goHome = useCallback(() => {
     gameOverProgress.stopAnimation();
     gameOverProgress.setValue(0);
@@ -193,7 +206,7 @@ export default function Page() {
   if (isPlaying) {
     return (
       <View style={styles.playShell}>
-        <FuryRing difficulty={difficulty} onGameOver={handleGameOver} />
+        <FuryRing difficulty={difficulty} onGameOver={handleGameOver} reviveHandle={reviveHandle} />
         {adsReady && <GameBanner />}
         {gameOverTransitioning && gameOverResult && (
           <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
@@ -208,7 +221,7 @@ export default function Page() {
                 ],
               }}
             >
-              <GameOverScreen result={gameOverResult} interactive={false} />
+              <GameOverScreen result={gameOverResult} interactive={false} revives={revives} />
             </Animated.View>
           </View>
         )}
@@ -221,6 +234,8 @@ export default function Page() {
       <GameOverScreen
         result={gameOverResult}
         interactive
+        revives={revives}
+        onRevive={useRevive}
         onPlayAgain={startNewGame}
         onHome={goHome}
       />
@@ -373,14 +388,20 @@ export default function Page() {
 function GameOverScreen({
   result,
   interactive,
+  revives,
+  onRevive,
   onPlayAgain,
   onHome,
 }: {
   result: GameOverResult;
   interactive: boolean;
+  revives: number;
+  onRevive?: () => void;
   onPlayAgain?: () => void;
   onHome?: () => void;
 }) {
+  const canRevive = revives > 0;
+
   return (
     <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.gameOverScreen}>
       <View style={styles.gameOverContent}>
@@ -395,6 +416,18 @@ function GameOverScreen({
 
         {interactive && (
           <>
+            <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}/{MAX_REVIVES}</Text>
+
+            <Pressable
+              disabled={!canRevive}
+              style={[styles.reviveButton, !canRevive && styles.reviveButtonDisabled]}
+              onPress={onRevive}
+            >
+              <Text style={[styles.reviveButtonText, !canRevive && styles.reviveButtonTextDisabled]}>
+                {canRevive ? strings.revive : strings.empty}
+              </Text>
+            </Pressable>
+
             <Pressable style={styles.playAgainButton} onPress={onPlayAgain}>
               <Text style={styles.playAgainButtonText}>{strings.playAgain}</Text>
             </Pressable>
@@ -460,7 +493,12 @@ const styles = StyleSheet.create({
   gameOverScoreRow: { width: "100%", maxWidth: 520, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
   gameOverScoreText: { fontSize: 18, fontWeight: "900", color: "#FFB000", fontVariant: ["tabular-nums"] },
   gameOverHighScoreText: { fontSize: 18, fontWeight: "900", color: "#6FE7FF", fontVariant: ["tabular-nums"] },
-  gameOverArtwork: { width: "100%", maxWidth: 560, height: 250, marginBottom: 34 },
+  gameOverArtwork: { width: "100%", maxWidth: 560, height: 250, marginBottom: 22 },
+  gameOverReviveCount: { color: "#FFD166", fontSize: 13, fontWeight: "900", letterSpacing: 1, marginBottom: 10 },
+  reviveButton: { width: "82%", maxWidth: 340, minHeight: 58, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 2, borderColor: "#FFD166", backgroundColor: "rgba(255,209,102,0.12)", paddingHorizontal: 24, marginBottom: 12 },
+  reviveButtonDisabled: { borderColor: "rgba(247,250,255,0.22)", backgroundColor: "rgba(247,250,255,0.04)" },
+  reviveButtonText: { color: "#FFD166", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
+  reviveButtonTextDisabled: { color: "rgba(247,250,255,0.38)" },
   playAgainButton: { width: "82%", maxWidth: 340, minHeight: 62, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: "#FFB000", paddingHorizontal: 24 },
   playAgainButtonText: { color: "#08111f", fontSize: 20, fontWeight: "900", letterSpacing: 1.2 },
   homeButton: { marginTop: 18, minWidth: 146, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 2, borderColor: "#6FE7FF", paddingHorizontal: 26 },
