@@ -33,7 +33,7 @@ import {
 } from "../components/ad-consent";
 
 const REVIVE_STORAGE_KEY = "fury-o-revives";
-const MAX_REVIVES = 3;
+const REVIVES_PER_AD = 3;
 const GAME_OVER_TRANSITION_MS = 1000;
 const PRIVACY_POLICY_URL = "https://morningcoffeelabs.no/#/fury-o/privacy";
 const TERMS_OF_USE_URL = "https://morningcoffeelabs.no/#/fury-o/terms";
@@ -78,8 +78,8 @@ export default function Page() {
       const storedValue = await AsyncStorage.getItem(REVIVE_STORAGE_KEY);
       if (storedValue === null) return;
       const parsed = Number.parseInt(storedValue, 10);
-      if (!Number.isFinite(parsed)) return;
-      setRevives(Math.min(MAX_REVIVES, Math.max(0, parsed)));
+      if (!Number.isFinite(parsed) || parsed < 0) return;
+      setRevives(parsed);
     } catch {}
   }, []);
 
@@ -100,7 +100,7 @@ export default function Page() {
   }, [loadRevives]);
 
   const earnRevive = useCallback(async () => {
-    if (earningRevive || revives >= MAX_REVIVES || !adsReady) return;
+    if (earningRevive || !adsReady) return;
     setEarningRevive(true);
     setReviveMessage("");
 
@@ -112,7 +112,7 @@ export default function Page() {
       }
 
       setRevives((current) => {
-        const next = Math.min(MAX_REVIVES, current + 1);
+        const next = current + REVIVES_PER_AD;
         AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(next)).catch(() => {});
         return next;
       });
@@ -122,7 +122,7 @@ export default function Page() {
     } finally {
       setEarningRevive(false);
     }
-  }, [adsReady, earningRevive, revives]);
+  }, [adsReady, earningRevive]);
 
   const handlePrivacyChoices = useCallback(async () => {
     if (Platform.OS === "web") return;
@@ -204,8 +204,14 @@ export default function Page() {
         return;
       }
 
+      const extraStoredRevives = REVIVES_PER_AD - 1;
+      await AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(extraStoredRevives));
+      setRevives(extraStoredRevives);
+
       const resumed = resumeCurrentRun(true);
       if (!resumed) {
+        await AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(REVIVES_PER_AD));
+        setRevives(REVIVES_PER_AD);
         setReviveMessage(strings.adNotReady);
       } else {
         setReviveMessage("");
@@ -319,8 +325,7 @@ export default function Page() {
     );
   }
 
-  const reviveFull = revives >= MAX_REVIVES;
-  const earnDisabled = reviveFull || earningRevive || !adsReady;
+  const earnDisabled = earningRevive || !adsReady;
 
   return (
     <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.container}>
@@ -331,10 +336,10 @@ export default function Page() {
       <View style={styles.content}>
         <FuryArtwork kind="logo" style={styles.logo} />
         <View style={styles.revivePanel}>
-          <Text style={styles.reviveCount}>{strings.revives} {revives}/{MAX_REVIVES}</Text>
+          <Text style={styles.reviveCount}>{strings.revives} {revives}</Text>
           <Pressable disabled={earnDisabled} style={[styles.earnReviveButton, earnDisabled && styles.earnReviveButtonDisabled]} onPress={earnRevive}>
             <Text style={[styles.earnReviveButtonText, earnDisabled && styles.earnReviveButtonTextDisabled]}>
-              {reviveFull ? strings.reviveFull : earningRevive ? strings.loadingAd : strings.earnRevive}
+              {earningRevive ? strings.loadingAd : "WATCH AD — GET 3 REVIVES"}
             </Text>
           </Pressable>
           <Text style={styles.reviveHint}>{strings.reviveHint}</Text>
@@ -385,7 +390,7 @@ function GameOverScreen({
   onHome?: () => void;
 }) {
   const hasRevive = revives > 0;
-  const reviveLabel = reviving ? strings.loadingAd : hasRevive ? "USE REVIVE" : "WATCH AD TO REVIVE";
+  const reviveLabel = reviving ? strings.loadingAd : hasRevive ? "USE REVIVE" : "WATCH AD TO REVIVE — GET 3";
 
   return (
     <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.gameOverScreen}>
@@ -402,7 +407,7 @@ function GameOverScreen({
           <>
             {!reviveUsed && (
               <>
-                <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}/{MAX_REVIVES}</Text>
+                <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}</Text>
                 <Pressable disabled={reviving} style={[styles.reviveButton, reviving && styles.reviveButtonDisabled]} onPress={onRevive}>
                   <Text style={[styles.reviveButtonText, reviving && styles.reviveButtonTextDisabled]}>{reviveLabel}</Text>
                 </Pressable>
