@@ -226,8 +226,12 @@ export default function Page() {
       <View style={styles.playShell}>
         <FuryRing key={gameSessionKey} difficulty={difficulty} onGameOver={handleGameOver} reviveHandle={reviveHandle} />
         {adsReady && <GameBanner />}
-        {gameOverTransitioning && gameOverResult && (
-          <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
+
+        {gameOverResult && (
+          <View
+            pointerEvents={gameOverTransitioning ? "none" : "auto"}
+            style={styles.gameOverTransitionLayer}
+          >
             <Animated.View
               style={{
                 width: screenWidth,
@@ -236,40 +240,20 @@ export default function Page() {
                 transform: [{ scale: gameOverScale }, { rotate: gameOverRotate }],
               }}
             >
-              <GameOverScreen result={gameOverResult} interactive={false} revives={revives} />
+              <GameOverScreen
+                result={gameOverResult}
+                interactive={!gameOverTransitioning}
+                revives={revives}
+                reviving={revivingFromGameOver}
+                reviveMessage={reviveMessage}
+                onRevive={() => void useRevive()}
+                onPlayAgain={startNewGame}
+                onHome={goHome}
+              />
             </Animated.View>
           </View>
         )}
-        {!gameOverTransitioning && gameOverResult && (
-          <View style={styles.gameOverTransitionLayer}>
-            <GameOverScreen
-              result={gameOverResult}
-              interactive
-              revives={revives}
-              reviving={revivingFromGameOver}
-              reviveMessage={reviveMessage}
-              onRevive={() => void useRevive()}
-              onPlayAgain={startNewGame}
-              onHome={goHome}
-            />
-          </View>
-        )}
       </View>
-    );
-  }
-
-  if (gameOverResult) {
-    return (
-      <GameOverScreen
-        result={gameOverResult}
-        interactive
-        revives={revives}
-        reviving={revivingFromGameOver}
-        reviveMessage={reviveMessage}
-        onRevive={() => void useRevive()}
-        onPlayAgain={startNewGame}
-        onHome={goHome}
-      />
     );
   }
 
