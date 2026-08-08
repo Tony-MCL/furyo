@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native secrets / local files
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# Local environment files
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Example app
+app-example/
+
+# Android generated/local build output
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/.cxx/
+android/app/.cxx/
+android/local.properties
+android/**/*.iml
+android/**/*.hprof
+android/app/src/main/java/inline/
+android/**/*.jsbundle
+
+# Local/editor noise
+.vscode/
+coverage/
