@@ -10,7 +10,6 @@ import {
   Easing,
   ImageBackground,
   PanResponder,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -22,8 +21,7 @@ import {
   FURY_DIFFICULTIES,
   type FuryDifficulty,
 } from "./fury-difficulty";
-import { furyLanguage, strings } from "./i18n";
-import { showRewardedRevive } from "./rewarded-revive";
+import { strings } from "./i18n";
 
 const CANVAS_SIZE = 79;
 const RING_CENTER = CANVAS_SIZE / 2;
@@ -79,9 +77,14 @@ export type FuryGameOverResult = {
   highScore: number;
 };
 
+export type FuryReviveHandle = {
+  useRevive: () => boolean;
+};
+
 type FuryRingProps = {
   difficulty: FuryDifficulty;
   onGameOver: (result: FuryGameOverResult) => void;
+  reviveHandle?: React.MutableRefObject<FuryReviveHandle | null>;
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
@@ -424,7 +427,7 @@ function createRingPath() {
 
 const ringPath = createRingPath();
 
-export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
+export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryRingProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const difficultyConfig = FURY_DIFFICULTIES[difficulty];
 
@@ -452,7 +455,6 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const totalPausedMsRef = useRef(0);
   const resumeCountdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resumeCountdownActiveRef = useRef(false);
-  const revivePromptRef = useRef(false);
 
   const [balls, setBalls] = useState<BallData[]>([]);
   const [survivalPoints, setSurvivalPoints] = useState(0);
@@ -461,9 +463,6 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
   const [reviveCount, setReviveCount] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [resumeCountdown, setResumeCountdown] = useState<number | null>(null);
-  const [revivePrompt, setRevivePrompt] = useState(false);
-  const [reviveAdLoading, setReviveAdLoading] = useState(false);
-  const [revivePromptMessage, setRevivePromptMessage] = useState("");
 
   windowHeightRef.current = windowHeight;
   const score = survivalPoints + bonusPoints;
@@ -486,6 +485,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     }
     pauseStartedAtRef.current = null;
     pausedRef.current = false;
+    gameOverRef.current = false;
     lastTimestampRef.current = null;
     resumeCountdownTimerRef.current = null;
     resumeCountdownActiveRef.current = false;
@@ -525,12 +525,8 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       setResumeCountdown(null);
     };
 
-    const finishResume = () => {
-      finishPausedResume();
-    };
-
     const startResumeCountdown = () => {
-      if (!pausedRef.current || resumeCountdownActiveRef.current || revivePromptRef.current) return;
+      if (!pausedRef.current || resumeCountdownActiveRef.current || gameOverRef.current) return;
       resumeCountdownActiveRef.current = true;
       let nextValue = RESUME_COUNTDOWN_SECONDS;
       setResumeCountdown(nextValue);
@@ -538,7 +534,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       const tick = () => {
         nextValue -= 1;
         if (nextValue <= 0) {
-          finishResume();
+          finishPausedResume();
           return;
         }
         setResumeCountdown(nextValue);
@@ -560,7 +556,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         return;
       }
 
-      if (pausedRef.current && !revivePromptRef.current) startResumeCountdown();
+      if (pausedRef.current && !gameOverRef.current) startResumeCountdown();
     };
 
     setPaused(AppState.currentState !== "active");
@@ -738,47 +734,38 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     if (nextHighScore > previousHighScore) {
       void AsyncStorage.setItem(getHighScoreStorageKey(difficulty), String(nextHighScore)).catch(() => {});
     }
-    revivePromptRef.current = false;
-    setRevivePrompt(false);
     gameOverRef.current = true;
+    pausedRef.current = true;
+    if (pauseStartedAtRef.current === null) pauseStartedAtRef.current = Date.now();
+    setIsPaused(true);
     onGameOver({ difficulty, score: currentScore, highScore: nextHighScore });
   }, [difficulty, onGameOver]);
 
-  const activateRevive = useCallback((useStoredRevive: boolean) => {
-    if (useStoredRevive) {
-      const nextReviveCount = Math.max(0, reviveCountRef.current - 1);
-      reviveCountRef.current = nextReviveCount;
-      setReviveCount(nextReviveCount);
-      void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
+  const useStoredRevive = useCallback(() => {
+    if (!gameOverRef.current || reviveUsedRef.current || reviveCountRef.current <= 0) {
+      return false;
     }
+
+    const nextReviveCount = reviveCountRef.current - 1;
+    reviveCountRef.current = nextReviveCount;
+    setReviveCount(nextReviveCount);
+    void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
 
     reviveUsedRef.current = true;
     setReviveUsed(true);
     invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
-    revivePromptRef.current = false;
-    setRevivePrompt(false);
-    setRevivePromptMessage("");
     showReviveFeedback();
     startReviveCountdown();
+    return true;
   }, [showReviveFeedback, startReviveCountdown]);
 
-  const handleWatchAdAndRevive = useCallback(async () => {
-    if (reviveAdLoading || reviveCountRef.current > 0) return;
-    setReviveAdLoading(true);
-    setRevivePromptMessage("");
-    try {
-      const earned = await showRewardedRevive();
-      if (!earned) {
-        setRevivePromptMessage(strings.noReviveEarned);
-        return;
-      }
-      activateRevive(false);
-    } catch {
-      setRevivePromptMessage(strings.adNotReady);
-    } finally {
-      setReviveAdLoading(false);
-    }
-  }, [activateRevive, reviveAdLoading]);
+  useEffect(() => {
+    if (!reviveHandle) return;
+    reviveHandle.current = { useRevive: useStoredRevive };
+    return () => {
+      reviveHandle.current = null;
+    };
+  }, [reviveHandle, useStoredRevive]);
 
   const handleCollision = useCallback((id: number) => {
     if (gameOverRef.current || pausedRef.current) return;
@@ -794,13 +781,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     }
 
     removeBall(id);
-    revivePromptRef.current = true;
-    setRevivePrompt(true);
-    setRevivePromptMessage("");
-    pausedRef.current = true;
-    if (pauseStartedAtRef.current === null) pauseStartedAtRef.current = Date.now();
-    lastTimestampRef.current = null;
-    setIsPaused(true);
+    finishGame();
   }, [finishGame, removeBall]);
 
   const handleEaten = useCallback((id: number, kind: ProjectileKind) => {
@@ -857,15 +838,6 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
 
   const rotate = rotation.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] });
   const bonusScale = bonusFeedback.interpolate({ inputRange: [0, 1], outputRange: [0.65, 1] });
-  const hasStoredRevive = reviveCount > 0;
-  const revivePromptTitle = hasStoredRevive
-    ? furyLanguage === "no" ? "BRUKE REVIVE?" : "USE A REVIVE?"
-    : furyLanguage === "no" ? "TOM FOR REVIVES" : "OUT OF REVIVES";
-  const reviveButtonLabel = furyLanguage === "no" ? "BRUK REVIVE" : "USE REVIVE";
-  const adReviveButtonLabel = reviveAdLoading
-    ? strings.loadingAd
-    : furyLanguage === "no" ? "SE ANNONSE & REVIVE" : "WATCH AD & REVIVE";
-  const gameOverButtonLabel = "GAME OVER";
 
   return (
     <ImageBackground
@@ -911,41 +883,6 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         <Animated.View style={[styles.reviveGlow, { opacity: reviveFeedback }]} />
         <Animated.Text style={[styles.reviveText, { opacity: reviveFeedback }]}>{strings.revive}</Animated.Text>
       </Animated.View>
-
-      {revivePrompt && (
-        <View style={styles.revivePromptOverlay}>
-          <View style={styles.revivePromptCard}>
-            <Text style={styles.revivePromptTitle}>{revivePromptTitle}</Text>
-            <Text style={styles.revivePromptCount}>{strings.revives}: {reviveCount}</Text>
-
-            {hasStoredRevive ? (
-              <Pressable style={styles.revivePrimaryButton} onPress={() => activateRevive(true)}>
-                <Text style={styles.revivePrimaryButtonText}>{reviveButtonLabel}</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                disabled={reviveAdLoading}
-                style={[styles.revivePrimaryButton, reviveAdLoading && styles.reviveButtonDisabled]}
-                onPress={handleWatchAdAndRevive}
-              >
-                <Text style={styles.revivePrimaryButtonText}>{adReviveButtonLabel}</Text>
-              </Pressable>
-            )}
-
-            <Pressable
-              disabled={reviveAdLoading}
-              style={[styles.reviveSecondaryButton, reviveAdLoading && styles.reviveButtonDisabled]}
-              onPress={finishGame}
-            >
-              <Text style={styles.reviveSecondaryButtonText}>{gameOverButtonLabel}</Text>
-            </Pressable>
-
-            {!!revivePromptMessage && (
-              <Text style={styles.revivePromptMessage}>{revivePromptMessage}</Text>
-            )}
-          </View>
-        </View>
-      )}
 
       {resumeCountdown !== null && (
         <View pointerEvents="none" style={styles.resumeCountdownOverlay}>
@@ -1105,80 +1042,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     letterSpacing: 1.3,
-  },
-  revivePromptOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    backgroundColor: "rgba(2,5,13,0.66)",
-  },
-  revivePromptCard: {
-    width: "100%",
-    maxWidth: 340,
-    paddingHorizontal: 24,
-    paddingVertical: 26,
-    alignItems: "center",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,176,0,0.5)",
-    backgroundColor: "rgba(5,10,24,0.96)",
-  },
-  revivePromptTitle: {
-    color: TEXT_COLOR,
-    fontSize: 24,
-    fontWeight: "900",
-    textAlign: "center",
-    letterSpacing: 1,
-  },
-  revivePromptCount: {
-    marginTop: 8,
-    marginBottom: 20,
-    color: BONUS_COLOR,
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  revivePrimaryButton: {
-    width: "100%",
-    minHeight: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    backgroundColor: RING_COLOR,
-  },
-  revivePrimaryButtonText: {
-    color: "#171007",
-    fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  reviveSecondaryButton: {
-    width: "100%",
-    minHeight: 48,
-    marginTop: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(247,250,255,0.35)",
-  },
-  reviveSecondaryButtonText: {
-    color: TEXT_COLOR,
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-  reviveButtonDisabled: {
-    opacity: 0.55,
-  },
-  revivePromptMessage: {
-    marginTop: 14,
-    color: "#FFB000",
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "center",
   },
   resumeCountdownOverlay: {
     ...StyleSheet.absoluteFillObject,
