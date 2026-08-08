@@ -7,6 +7,7 @@ import {
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -239,64 +240,70 @@ export default function Page() {
           <Text style={styles.backButtonText}>‹</Text>
         </Pressable>
 
-        <View style={styles.infoContent}>
-          <FuryArtwork kind="logo" style={styles.infoLogo} />
-          <Text style={styles.infoTitle}>{strings.infoTitle}</Text>
-          <Text style={styles.infoText}>{strings.infoIntro}</Text>
-          <Text style={styles.infoText}>{strings.infoControls}</Text>
-          <Text style={styles.infoText}>{strings.infoBonus}</Text>
+        <ScrollView
+          style={styles.infoScroll}
+          contentContainerStyle={styles.infoScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.infoContent}>
+            <FuryArtwork kind="logo" style={styles.infoLogo} />
+            <Text style={styles.infoTitle}>{strings.infoTitle}</Text>
+            <Text style={styles.infoText}>{strings.infoIntro}</Text>
+            <Text style={styles.infoText}>{strings.infoControls}</Text>
+            <Text style={styles.infoText}>{strings.infoBonus}</Text>
 
-          <View style={styles.infoLinks}>
-            <Pressable
-              style={styles.infoLinkButton}
-              onPress={() => void Linking.openURL(COMMUNITY_URL)}
-            >
-              <Text style={styles.infoLinkText}>{strings.communityButton}</Text>
-            </Pressable>
+            <View style={styles.infoLinks}>
+              <Pressable
+                style={styles.infoLinkButton}
+                onPress={() => void Linking.openURL(COMMUNITY_URL)}
+              >
+                <Text style={styles.infoLinkText}>{strings.communityButton}</Text>
+              </Pressable>
 
-            <Pressable
-              style={styles.infoLinksToggle}
-              onPress={() => setShowMoreInfoLinks((current) => !current)}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showMoreInfoLinks }}
-            >
-              <Text style={styles.infoLinksToggleText}>
-                {showMoreInfoLinks ? "⌃" : "⌄"}
-              </Text>
-            </Pressable>
+              <Pressable
+                style={styles.infoLinksToggle}
+                onPress={() => setShowMoreInfoLinks((current) => !current)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showMoreInfoLinks }}
+              >
+                <Text style={styles.infoLinksToggleText}>
+                  {showMoreInfoLinks ? "⌃" : "⌄"}
+                </Text>
+              </Pressable>
 
-            {showMoreInfoLinks && (
-              <View style={styles.infoLinksDropdown}>
-                <Pressable
-                  style={styles.infoLinkButton}
-                  onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
-                >
-                  <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
-                </Pressable>
-                {Platform.OS !== "web" && (
+              {showMoreInfoLinks && (
+                <View style={styles.infoLinksDropdown}>
                   <Pressable
                     style={styles.infoLinkButton}
-                    onPress={() => void handlePrivacyChoices()}
+                    onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
                   >
-                    <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
+                    <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
                   </Pressable>
-                )}
-                <Pressable
-                  style={styles.infoLinkButton}
-                  onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
-                >
-                  <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.infoLinkButton}
-                  onPress={() => void Linking.openURL(CONTACT_URL)}
-                >
-                  <Text style={styles.infoLinkText}>{strings.contact}</Text>
-                </Pressable>
-              </View>
-            )}
+                  {Platform.OS !== "web" && (
+                    <Pressable
+                      style={styles.infoLinkButton}
+                      onPress={() => void handlePrivacyChoices()}
+                    >
+                      <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={styles.infoLinkButton}
+                    onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
+                  >
+                    <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.infoLinkButton}
+                    onPress={() => void Linking.openURL(CONTACT_URL)}
+                  >
+                    <Text style={styles.infoLinkText}>{strings.contact}</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </ScrollView>
 
         <Text style={styles.footer}>© 2026 Morning Coffee Labs</Text>
       </ImageBackground>
@@ -434,6 +441,8 @@ const styles = StyleSheet.create({
   infoButtonText: { color: "#F7FAFF", fontSize: 22, fontWeight: "800", lineHeight: 24 },
   backButton: { position: "absolute", top: 38, left: 20, width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: "#6FE7FF", alignItems: "center", justifyContent: "center", zIndex: 10 },
   backButtonText: { color: "#F7FAFF", fontSize: 38, fontWeight: "500", lineHeight: 39, marginTop: -3 },
+  infoScroll: { flex: 1, width: "100%" },
+  infoScrollContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingTop: 88, paddingBottom: 76 },
   infoContent: { width: "100%", maxWidth: 520, alignItems: "center", paddingHorizontal: 34 },
   infoLogo: { width: "42%", maxWidth: 190, aspectRatio: 1.16, marginBottom: 12 },
   infoTitle: { color: "#FFB000", fontSize: 30, fontWeight: "900", letterSpacing: 2, marginBottom: 26 },
