@@ -160,8 +160,13 @@ export default function Page() {
     setIsPlaying(true);
   }, [gameOverProgress]);
 
-  const resumeCurrentRun = useCallback(() => {
-    const resumed = reviveHandle.current?.useRevive() ?? false;
+  const resumeCurrentRun = useCallback((fromAd = false) => {
+    const handle = reviveHandle.current;
+    const resumed = handle
+      ? fromAd
+        ? handle.useAdRevive()
+        : handle.useRevive()
+      : false;
     if (!resumed) return false;
 
     gameOverProgress.stopAnimation();
@@ -180,7 +185,7 @@ export default function Page() {
 
     try {
       if (revives > 0) {
-        const resumed = resumeCurrentRun();
+        const resumed = resumeCurrentRun(false);
         if (!resumed) setReviveMessage(strings.adNotReady);
         return;
       }
@@ -196,10 +201,13 @@ export default function Page() {
         return;
       }
 
-      await AsyncStorage.setItem(REVIVE_STORAGE_KEY, "1");
-      setRevives(1);
-      const resumed = resumeCurrentRun();
-      if (!resumed) setReviveMessage(strings.adNotReady);
+      const resumed = resumeCurrentRun(true);
+      if (!resumed) {
+        setReviveMessage(strings.adNotReady);
+      } else {
+        setReviveMessage("");
+        void preloadRewardedRevive();
+      }
     } catch {
       setReviveMessage(strings.adNotReady);
     } finally {
