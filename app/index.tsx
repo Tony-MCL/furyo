@@ -68,6 +68,7 @@ export default function Page() {
   const [gameOverTransitioning, setGameOverTransitioning] = useState(false);
   const [adsReady, setAdsReady] = useState(Platform.OS === "web");
   const [revivingFromGameOver, setRevivingFromGameOver] = useState(false);
+  const [reviveUsedThisRun, setReviveUsedThisRun] = useState(false);
 
   const gameOverProgress = useRef(new Animated.Value(0)).current;
   const reviveHandle = useRef<FuryReviveHandle | null>(null);
@@ -156,6 +157,7 @@ export default function Page() {
     setGameOverResult(null);
     setGameOverTransitioning(false);
     setRevivingFromGameOver(false);
+    setReviveUsedThisRun(false);
     setGameSessionKey((current) => current + 1);
     setIsPlaying(true);
   }, [gameOverProgress]);
@@ -173,6 +175,7 @@ export default function Page() {
     gameOverProgress.setValue(0);
     setGameOverResult(null);
     setGameOverTransitioning(false);
+    setReviveUsedThisRun(true);
     setIsPlaying(true);
     void loadRevives();
     return true;
@@ -221,6 +224,7 @@ export default function Page() {
     setGameOverResult(null);
     setGameOverTransitioning(false);
     setRevivingFromGameOver(false);
+    setReviveUsedThisRun(false);
     setIsPlaying(false);
     void loadRevives();
   }, [gameOverProgress, loadRevives]);
@@ -252,6 +256,7 @@ export default function Page() {
                 result={gameOverResult}
                 interactive={!gameOverTransitioning}
                 revives={revives}
+                reviveUsed={reviveUsedThisRun}
                 reviving={revivingFromGameOver}
                 reviveMessage={reviveMessage}
                 onRevive={() => void useRevive()}
@@ -362,6 +367,7 @@ function GameOverScreen({
   result,
   interactive,
   revives,
+  reviveUsed = false,
   reviving = false,
   reviveMessage = "",
   onRevive,
@@ -371,6 +377,7 @@ function GameOverScreen({
   result: GameOverResult;
   interactive: boolean;
   revives: number;
+  reviveUsed?: boolean;
   reviving?: boolean;
   reviveMessage?: string;
   onRevive?: () => void;
@@ -393,11 +400,15 @@ function GameOverScreen({
 
         {interactive && (
           <>
-            <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}/{MAX_REVIVES}</Text>
-            <Pressable disabled={reviving} style={[styles.reviveButton, reviving && styles.reviveButtonDisabled]} onPress={onRevive}>
-              <Text style={[styles.reviveButtonText, reviving && styles.reviveButtonTextDisabled]}>{reviveLabel}</Text>
-            </Pressable>
-            {!!reviveMessage && <Text style={styles.gameOverReviveMessage}>{reviveMessage}</Text>}
+            {!reviveUsed && (
+              <>
+                <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}/{MAX_REVIVES}</Text>
+                <Pressable disabled={reviving} style={[styles.reviveButton, reviving && styles.reviveButtonDisabled]} onPress={onRevive}>
+                  <Text style={[styles.reviveButtonText, reviving && styles.reviveButtonTextDisabled]}>{reviveLabel}</Text>
+                </Pressable>
+                {!!reviveMessage && <Text style={styles.gameOverReviveMessage}>{reviveMessage}</Text>}
+              </>
+            )}
             <Pressable style={styles.playAgainButton} onPress={onPlayAgain}>
               <Text style={styles.playAgainButtonText}>{strings.playAgain}</Text>
             </Pressable>
