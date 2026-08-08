@@ -66,6 +66,7 @@ export default function Page() {
   const [gameOverResult, setGameOverResult] = useState<GameOverResult | null>(null);
   const [gameOverTransitioning, setGameOverTransitioning] = useState(false);
   const [adsReady, setAdsReady] = useState(Platform.OS === "web");
+  const [revivingFromGameOver, setRevivingFromGameOver] = useState(false);
 
   const gameOverProgress = useRef(new Animated.Value(0)).current;
   const reviveHandle = useRef<FuryReviveHandle | null>(null);
@@ -82,19 +83,13 @@ export default function Page() {
 
   useEffect(() => {
     loadRevives();
-
-    if (Platform.OS === "web") {
-      return;
-    }
+    if (Platform.OS === "web") return;
 
     let active = true;
-
     void initializeAdsConsent().then((ready) => {
       if (!active) return;
       setAdsReady(ready);
-      if (ready) {
-        void preloadRewardedRevive();
-      }
+      if (ready) void preloadRewardedRevive();
     });
 
     return () => {
@@ -104,7 +99,6 @@ export default function Page() {
 
   const earnRevive = useCallback(async () => {
     if (earningRevive || revives >= MAX_REVIVES || !adsReady) return;
-
     setEarningRevive(true);
     setReviveMessage("");
 
@@ -129,16 +123,11 @@ export default function Page() {
   }, [adsReady, earningRevive, revives]);
 
   const handlePrivacyChoices = useCallback(async () => {
-    if (Platform.OS === "web") {
-      return;
-    }
-
+    if (Platform.OS === "web") return;
     await showPrivacyOptions();
     const ready = await initializeAdsConsent();
     setAdsReady(ready);
-    if (ready) {
-      void preloadRewardedRevive();
-    }
+    if (ready) void preloadRewardedRevive();
   }, []);
 
   const handleGameOver = useCallback((result: GameOverResult) => {
@@ -166,12 +155,13 @@ export default function Page() {
     gameOverProgress.setValue(0);
     setGameOverResult(null);
     setGameOverTransitioning(false);
+    setRevivingFromGameOver(false);
     setIsPlaying(true);
   }, [gameOverProgress]);
 
-  const useRevive = useCallback(() => {
+  const resumeCurrentRun = useCallback(() => {
     const resumed = reviveHandle.current?.useRevive() ?? false;
-    if (!resumed) return;
+    if (!resumed) return false;
 
     gameOverProgress.stopAnimation();
     gameOverProgress.setValue(0);
@@ -179,29 +169,55 @@ export default function Page() {
     setGameOverTransitioning(false);
     setIsPlaying(true);
     void loadRevives();
+    return true;
   }, [gameOverProgress, loadRevives]);
+
+  const useRevive = useCallback(async () => {
+    if (revivingFromGameOver) return;
+    setRevivingFromGameOver(true);
+    setReviveMessage("");
+
+    try {
+      if (revives > 0) {
+        resumeCurrentRun();
+        return;
+      }
+
+      if (!adsReady) {
+        setReviveMessage(strings.adNotReady);
+        return;
+      }
+
+      const earned = await showRewardedRevive();
+      if (!earned) {
+        setReviveMessage(strings.noReviveEarned);
+        return;
+      }
+
+      await AsyncStorage.setItem(REVIVE_STORAGE_KEY, "1");
+      setRevives(1);
+      const resumed = resumeCurrentRun();
+      if (!resumed) setReviveMessage(strings.adNotReady);
+    } catch {
+      setReviveMessage(strings.adNotReady);
+    } finally {
+      setRevivingFromGameOver(false);
+    }
+  }, [adsReady, revives, resumeCurrentRun, revivingFromGameOver]);
 
   const goHome = useCallback(() => {
     gameOverProgress.stopAnimation();
     gameOverProgress.setValue(0);
     setGameOverResult(null);
     setGameOverTransitioning(false);
+    setRevivingFromGameOver(false);
     setIsPlaying(false);
     void loadRevives();
   }, [gameOverProgress, loadRevives]);
 
-  const gameOverScale = gameOverProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.06, 1],
-  });
-  const gameOverRotate = gameOverProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["-720deg", "0deg"],
-  });
-  const gameOverOpacity = gameOverProgress.interpolate({
-    inputRange: [0, 0.12, 1],
-    outputRange: [0, 0.9, 1],
-  });
+  const gameOverScale = gameOverProgress.interpolate({ inputRange: [0, 1], outputRange: [0.06, 1] });
+  const gameOverRotate = gameOverProgress.interpolate({ inputRange: [0, 1], outputRange: ["-720deg", "0deg"] });
+  const gameOverOpacity = gameOverProgress.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 0.9, 1] });
 
   if (isPlaying) {
     return (
@@ -215,10 +231,7 @@ export default function Page() {
                 width: screenWidth,
                 height: screenHeight,
                 opacity: gameOverOpacity,
-                transform: [
-                  { scale: gameOverScale },
-                  { rotate: gameOverRotate },
-                ],
+                transform: [{ scale: gameOverScale }, { rotate: gameOverRotate }],
               }}
             >
               <GameOverScreen result={gameOverResult} interactive={false} revives={revives} />
@@ -235,7 +248,9 @@ export default function Page() {
         result={gameOverResult}
         interactive
         revives={revives}
-        onRevive={useRevive}
+        reviving={revivingFromGameOver}
+        reviveMessage={reviveMessage}
+        onRevive={() => void useRevive()}
         onPlayAgain={startNewGame}
         onHome={goHome}
       />
@@ -245,21 +260,11 @@ export default function Page() {
   if (showInfo) {
     return (
       <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.container}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => {
-            setShowMoreInfoLinks(false);
-            setShowInfo(false);
-          }}
-        >
+        <Pressable style={styles.backButton} onPress={() => { setShowMoreInfoLinks(false); setShowInfo(false); }}>
           <Text style={styles.backButtonText}>‹</Text>
         </Pressable>
 
-        <ScrollView
-          style={styles.infoScroll}
-          contentContainerStyle={styles.infoScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={styles.infoScroll} contentContainerStyle={styles.infoScrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.infoContent}>
             <FuryArtwork kind="logo" style={styles.infoLogo} />
             <Text style={styles.infoTitle}>{strings.infoTitle}</Text>
@@ -268,50 +273,26 @@ export default function Page() {
             <Text style={styles.infoText}>{strings.infoBonus}</Text>
 
             <View style={styles.infoLinks}>
-              <Pressable
-                style={styles.infoLinkButton}
-                onPress={() => void Linking.openURL(COMMUNITY_URL)}
-              >
+              <Pressable style={styles.infoLinkButton} onPress={() => void Linking.openURL(COMMUNITY_URL)}>
                 <Text style={styles.infoLinkText}>{strings.communityButton}</Text>
               </Pressable>
-
-              <Pressable
-                style={styles.infoLinksToggle}
-                onPress={() => setShowMoreInfoLinks((current) => !current)}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: showMoreInfoLinks }}
-              >
-                <Text style={styles.infoLinksToggleText}>
-                  {showMoreInfoLinks ? "⌃" : "⌄"}
-                </Text>
+              <Pressable style={styles.infoLinksToggle} onPress={() => setShowMoreInfoLinks((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: showMoreInfoLinks }}>
+                <Text style={styles.infoLinksToggleText}>{showMoreInfoLinks ? "⌃" : "⌄"}</Text>
               </Pressable>
-
               {showMoreInfoLinks && (
                 <View style={styles.infoLinksDropdown}>
-                  <Pressable
-                    style={styles.infoLinkButton}
-                    onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
-                  >
+                  <Pressable style={styles.infoLinkButton} onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}>
                     <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
                   </Pressable>
                   {Platform.OS !== "web" && (
-                    <Pressable
-                      style={styles.infoLinkButton}
-                      onPress={() => void handlePrivacyChoices()}
-                    >
+                    <Pressable style={styles.infoLinkButton} onPress={() => void handlePrivacyChoices()}>
                       <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
                     </Pressable>
                   )}
-                  <Pressable
-                    style={styles.infoLinkButton}
-                    onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
-                  >
+                  <Pressable style={styles.infoLinkButton} onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}>
                     <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
                   </Pressable>
-                  <Pressable
-                    style={styles.infoLinkButton}
-                    onPress={() => void Linking.openURL(CONTACT_URL)}
-                  >
+                  <Pressable style={styles.infoLinkButton} onPress={() => void Linking.openURL(CONTACT_URL)}>
                     <Text style={styles.infoLinkText}>{strings.contact}</Text>
                   </Pressable>
                 </View>
@@ -336,20 +317,11 @@ export default function Page() {
 
       <View style={styles.content}>
         <FuryArtwork kind="logo" style={styles.logo} />
-
         <View style={styles.revivePanel}>
           <Text style={styles.reviveCount}>{strings.revives} {revives}/{MAX_REVIVES}</Text>
-          <Pressable
-            disabled={earnDisabled}
-            style={[styles.earnReviveButton, earnDisabled && styles.earnReviveButtonDisabled]}
-            onPress={earnRevive}
-          >
+          <Pressable disabled={earnDisabled} style={[styles.earnReviveButton, earnDisabled && styles.earnReviveButtonDisabled]} onPress={earnRevive}>
             <Text style={[styles.earnReviveButtonText, earnDisabled && styles.earnReviveButtonTextDisabled]}>
-              {reviveFull
-                ? strings.reviveFull
-                : earningRevive
-                  ? strings.loadingAd
-                  : strings.earnRevive}
+              {reviveFull ? strings.reviveFull : earningRevive ? strings.loadingAd : strings.earnRevive}
             </Text>
           </Pressable>
           <Text style={styles.reviveHint}>{strings.reviveHint}</Text>
@@ -357,19 +329,12 @@ export default function Page() {
         </View>
 
         <Text style={styles.difficultyLabel}>{strings.difficulty}</Text>
-
         <View style={styles.difficultyRow}>
           {FURY_DIFFICULTY_ORDER.map((option) => {
             const selected = option === difficulty;
             return (
-              <Pressable
-                key={option}
-                style={[styles.difficultyButton, selected && styles.difficultyButtonSelected]}
-                onPress={() => setDifficulty(option)}
-              >
-                <Text style={[styles.difficultyButtonText, selected && styles.difficultyButtonTextSelected]}>
-                  {FURY_DIFFICULTIES[option].label}
-                </Text>
+              <Pressable key={option} style={[styles.difficultyButton, selected && styles.difficultyButtonSelected]} onPress={() => setDifficulty(option)}>
+                <Text style={[styles.difficultyButtonText, selected && styles.difficultyButtonTextSelected]}>{FURY_DIFFICULTIES[option].label}</Text>
               </Pressable>
             );
           })}
@@ -389,6 +354,8 @@ function GameOverScreen({
   result,
   interactive,
   revives,
+  reviving = false,
+  reviveMessage = "",
   onRevive,
   onPlayAgain,
   onHome,
@@ -396,17 +363,19 @@ function GameOverScreen({
   result: GameOverResult;
   interactive: boolean;
   revives: number;
+  reviving?: boolean;
+  reviveMessage?: string;
   onRevive?: () => void;
   onPlayAgain?: () => void;
   onHome?: () => void;
 }) {
-  const canRevive = revives > 0;
+  const hasRevive = revives > 0;
+  const reviveLabel = reviving ? strings.loadingAd : hasRevive ? "USE REVIVE" : "WATCH AD TO REVIVE";
 
   return (
     <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.gameOverScreen}>
       <View style={styles.gameOverContent}>
         <Text style={styles.gameOverDifficulty}>{FURY_DIFFICULTIES[result.difficulty].label}</Text>
-
         <View style={styles.gameOverScoreRow}>
           <Text style={styles.gameOverScoreText}>{strings.score}: {result.score}</Text>
           <Text style={styles.gameOverHighScoreText}>{strings.highScore}: {result.highScore}</Text>
@@ -417,21 +386,13 @@ function GameOverScreen({
         {interactive && (
           <>
             <Text style={styles.gameOverReviveCount}>{strings.revives}: {revives}/{MAX_REVIVES}</Text>
-
-            <Pressable
-              disabled={!canRevive}
-              style={[styles.reviveButton, !canRevive && styles.reviveButtonDisabled]}
-              onPress={onRevive}
-            >
-              <Text style={[styles.reviveButtonText, !canRevive && styles.reviveButtonTextDisabled]}>
-                {canRevive ? strings.revive : strings.empty}
-              </Text>
+            <Pressable disabled={reviving} style={[styles.reviveButton, reviving && styles.reviveButtonDisabled]} onPress={onRevive}>
+              <Text style={[styles.reviveButtonText, reviving && styles.reviveButtonTextDisabled]}>{reviveLabel}</Text>
             </Pressable>
-
+            {!!reviveMessage && <Text style={styles.gameOverReviveMessage}>{reviveMessage}</Text>}
             <Pressable style={styles.playAgainButton} onPress={onPlayAgain}>
               <Text style={styles.playAgainButtonText}>{strings.playAgain}</Text>
             </Pressable>
-
             <Pressable style={styles.homeButton} onPress={onHome}>
               <Text style={styles.homeButtonText}>{strings.home}</Text>
             </Pressable>
@@ -445,13 +406,7 @@ function GameOverScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#02050d" },
   playShell: { flex: 1, width: "100%", height: "100%", backgroundColor: "#02050d", overflow: "hidden" },
-  gameOverTransitionLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 50,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
+  gameOverTransitionLayer: { ...StyleSheet.absoluteFillObject, zIndex: 50, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   content: { width: "100%", alignItems: "center", paddingHorizontal: 24 },
   logo: { width: "72%", maxWidth: 390, aspectRatio: 1.16, marginBottom: 14 },
   revivePanel: { width: "78%", maxWidth: 320, alignItems: "center", marginBottom: 22 },
@@ -499,6 +454,7 @@ const styles = StyleSheet.create({
   reviveButtonDisabled: { borderColor: "rgba(247,250,255,0.22)", backgroundColor: "rgba(247,250,255,0.04)" },
   reviveButtonText: { color: "#FFD166", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
   reviveButtonTextDisabled: { color: "rgba(247,250,255,0.38)" },
+  gameOverReviveMessage: { color: "#FFD166", fontSize: 11, fontWeight: "800", marginBottom: 10, textAlign: "center" },
   playAgainButton: { width: "82%", maxWidth: 340, minHeight: 62, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: "#FFB000", paddingHorizontal: 24 },
   playAgainButtonText: { color: "#08111f", fontSize: 20, fontWeight: "900", letterSpacing: 1.2 },
   homeButton: { marginTop: 18, minWidth: 146, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 2, borderColor: "#6FE7FF", paddingHorizontal: 26 },
