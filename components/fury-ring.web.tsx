@@ -77,9 +77,14 @@ export type FuryGameOverResult = {
   highScore: number;
 };
 
+export type FuryReviveHandle = {
+  useRevive: () => boolean;
+};
+
 type FuryRingProps = {
   difficulty: FuryDifficulty;
   onGameOver: (result: FuryGameOverResult) => void;
+  reviveHandle?: React.MutableRefObject<FuryReviveHandle | null>;
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
@@ -212,7 +217,7 @@ function getPointOnEdge(
       return {
         x: isSpawnPoint
           ? getRandomVerticalSpawnX(width)
-          : randomBetween(-halfWidth, halfWidth),
+          : randomBetween(excludedHalfWidth, halfWidth),
         y: halfHeight + outside,
       };
     case "left":
@@ -413,7 +418,7 @@ function SpawnBall({
   );
 }
 
-export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
+export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryRingProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const difficultyConfig = FURY_DIFFICULTIES[difficulty];
 
@@ -466,6 +471,42 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     );
   }, []);
 
+  const finishPausedResume = useCallback(() => {
+    if (pauseStartedAtRef.current !== null) {
+      totalPausedMsRef.current += Date.now() - pauseStartedAtRef.current;
+    }
+    pauseStartedAtRef.current = null;
+    pausedRef.current = false;
+    gameOverRef.current = false;
+    lastTimestampRef.current = null;
+    resumeCountdownTimerRef.current = null;
+    resumeCountdownActiveRef.current = false;
+    setResumeCountdown(null);
+    setIsPaused(false);
+  }, []);
+
+  const startReviveCountdown = useCallback(() => {
+    if (resumeCountdownTimerRef.current !== null) {
+      clearTimeout(resumeCountdownTimerRef.current);
+      resumeCountdownTimerRef.current = null;
+    }
+    resumeCountdownActiveRef.current = true;
+    let nextValue = RESUME_COUNTDOWN_SECONDS;
+    setResumeCountdown(nextValue);
+
+    const tick = () => {
+      nextValue -= 1;
+      if (nextValue <= 0) {
+        finishPausedResume();
+        return;
+      }
+      setResumeCountdown(nextValue);
+      resumeCountdownTimerRef.current = setTimeout(tick, 1000);
+    };
+
+    resumeCountdownTimerRef.current = setTimeout(tick, 1000);
+  }, [finishPausedResume]);
+
   useEffect(() => {
     const clearResumeCountdown = () => {
       if (resumeCountdownTimerRef.current !== null) {
@@ -476,21 +517,8 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       setResumeCountdown(null);
     };
 
-    const finishResume = () => {
-      if (pauseStartedAtRef.current !== null) {
-        totalPausedMsRef.current += Date.now() - pauseStartedAtRef.current;
-      }
-      pauseStartedAtRef.current = null;
-      pausedRef.current = false;
-      lastTimestampRef.current = null;
-      resumeCountdownTimerRef.current = null;
-      resumeCountdownActiveRef.current = false;
-      setResumeCountdown(null);
-      setIsPaused(false);
-    };
-
     const startResumeCountdown = () => {
-      if (!pausedRef.current || resumeCountdownActiveRef.current) return;
+      if (!pausedRef.current || resumeCountdownActiveRef.current || gameOverRef.current) return;
       resumeCountdownActiveRef.current = true;
       let nextValue = RESUME_COUNTDOWN_SECONDS;
       setResumeCountdown(nextValue);
@@ -498,7 +526,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       const tick = () => {
         nextValue -= 1;
         if (nextValue <= 0) {
-          finishResume();
+          finishPausedResume();
           return;
         }
         setResumeCountdown(nextValue);
@@ -520,7 +548,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
         return;
       }
 
-      if (pausedRef.current) startResumeCountdown();
+      if (pausedRef.current && !gameOverRef.current) startResumeCountdown();
     };
 
     const updateFromVisibility = () => {
@@ -541,7 +569,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [finishPausedResume]);
 
   useEffect(() => {
     let cancelled = false;
@@ -699,27 +727,7 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
     ]).start();
   }, [reviveFeedback]);
 
-  const handleCollision = useCallback((id: number) => {
-    if (gameOverRef.current || pausedRef.current) return;
-
-    if (Date.now() < invulnerableUntilRef.current) {
-      removeBall(id);
-      return;
-    }
-
-    if (!reviveUsedRef.current && reviveCountRef.current > 0) {
-      const nextReviveCount = reviveCountRef.current - 1;
-      reviveCountRef.current = nextReviveCount;
-      setReviveCount(nextReviveCount);
-      void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
-      reviveUsedRef.current = true;
-      setReviveUsed(true);
-      invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
-      removeBall(id);
-      showReviveFeedback();
-      return;
-    }
-
+  const finishGame = useCallback(() => {
     const currentScore = scoreRef.current;
     const previousHighScore = sessionHighScores[difficulty];
     const nextHighScore = Math.max(previousHighScore, currentScore);
@@ -728,8 +736,54 @@ export default function FuryRing({ difficulty, onGameOver }: FuryRingProps) {
       void AsyncStorage.setItem(getHighScoreStorageKey(difficulty), String(nextHighScore)).catch(() => {});
     }
     gameOverRef.current = true;
+    pausedRef.current = true;
+    if (pauseStartedAtRef.current === null) pauseStartedAtRef.current = Date.now();
+    setIsPaused(true);
     onGameOver({ difficulty, score: currentScore, highScore: nextHighScore });
-  }, [difficulty, onGameOver, removeBall, showReviveFeedback]);
+  }, [difficulty, onGameOver]);
+
+  const useStoredRevive = useCallback(() => {
+    if (!gameOverRef.current || reviveUsedRef.current || reviveCountRef.current <= 0) {
+      return false;
+    }
+
+    const nextReviveCount = reviveCountRef.current - 1;
+    reviveCountRef.current = nextReviveCount;
+    setReviveCount(nextReviveCount);
+    void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
+
+    reviveUsedRef.current = true;
+    setReviveUsed(true);
+    invulnerableUntilRef.current = Date.now() + REVIVE_INVULNERABILITY_MS;
+    showReviveFeedback();
+    startReviveCountdown();
+    return true;
+  }, [showReviveFeedback, startReviveCountdown]);
+
+  useEffect(() => {
+    if (!reviveHandle) return;
+    reviveHandle.current = { useRevive: useStoredRevive };
+    return () => {
+      reviveHandle.current = null;
+    };
+  }, [reviveHandle, useStoredRevive]);
+
+  const handleCollision = useCallback((id: number) => {
+    if (gameOverRef.current || pausedRef.current) return;
+
+    if (Date.now() < invulnerableUntilRef.current) {
+      removeBall(id);
+      return;
+    }
+
+    if (reviveUsedRef.current) {
+      finishGame();
+      return;
+    }
+
+    removeBall(id);
+    finishGame();
+  }, [finishGame, removeBall]);
 
   const handleEaten = useCallback((id: number, kind: ProjectileKind) => {
     if (gameOverRef.current || pausedRef.current) return;
