@@ -57,6 +57,7 @@ export default function Page() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [isPlaying, setIsPlaying] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showMoreInfoLinks, setShowMoreInfoLinks] = useState(false);
   const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
   const [revives, setRevives] = useState(0);
   const [earningRevive, setEarningRevive] = useState(false);
@@ -228,7 +229,13 @@ export default function Page() {
   if (showInfo) {
     return (
       <ImageBackground source={NIGHT_SKY_SOURCE} resizeMode="cover" style={styles.container}>
-        <Pressable style={styles.backButton} onPress={() => setShowInfo(false)}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => {
+            setShowMoreInfoLinks(false);
+            setShowInfo(false);
+          }}
+        >
           <Text style={styles.backButtonText}>‹</Text>
         </Pressable>
 
@@ -246,32 +253,48 @@ export default function Page() {
             >
               <Text style={styles.infoLinkText}>{strings.communityButton}</Text>
             </Pressable>
+
             <Pressable
-              style={styles.infoLinkButton}
-              onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+              style={styles.infoLinksToggle}
+              onPress={() => setShowMoreInfoLinks((current) => !current)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showMoreInfoLinks }}
             >
-              <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
+              <Text style={styles.infoLinksToggleText}>
+                {showMoreInfoLinks ? "⌃" : "⌄"}
+              </Text>
             </Pressable>
-            {Platform.OS !== "web" && (
-              <Pressable
-                style={styles.infoLinkButton}
-                onPress={() => void handlePrivacyChoices()}
-              >
-                <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
-              </Pressable>
+
+            {showMoreInfoLinks && (
+              <View style={styles.infoLinksDropdown}>
+                <Pressable
+                  style={styles.infoLinkButton}
+                  onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+                >
+                  <Text style={styles.infoLinkText}>{strings.privacyPolicy}</Text>
+                </Pressable>
+                {Platform.OS !== "web" && (
+                  <Pressable
+                    style={styles.infoLinkButton}
+                    onPress={() => void handlePrivacyChoices()}
+                  >
+                    <Text style={styles.infoLinkText}>{strings.privacyChoices}</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.infoLinkButton}
+                  onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
+                >
+                  <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.infoLinkButton}
+                  onPress={() => void Linking.openURL(CONTACT_URL)}
+                >
+                  <Text style={styles.infoLinkText}>{strings.contact}</Text>
+                </Pressable>
+              </View>
             )}
-            <Pressable
-              style={styles.infoLinkButton}
-              onPress={() => void Linking.openURL(TERMS_OF_USE_URL)}
-            >
-              <Text style={styles.infoLinkText}>{strings.termsOfUse}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.infoLinkButton}
-              onPress={() => void Linking.openURL(CONTACT_URL)}
-            >
-              <Text style={styles.infoLinkText}>{strings.contact}</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -415,9 +438,12 @@ const styles = StyleSheet.create({
   infoLogo: { width: "42%", maxWidth: 190, aspectRatio: 1.16, marginBottom: 12 },
   infoTitle: { color: "#FFB000", fontSize: 30, fontWeight: "900", letterSpacing: 2, marginBottom: 26 },
   infoText: { width: "100%", color: "#F7FAFF", fontSize: 16, lineHeight: 23, textAlign: "center", marginBottom: 13 },
-  infoLinks: { width: "100%", marginTop: 24, alignItems: "center" },
+  infoLinks: { width: "100%", marginTop: 18, alignItems: "center" },
   infoLinkButton: { width: "82%", maxWidth: 300, minHeight: 46, alignItems: "center", justifyContent: "center", borderBottomWidth: 1, borderBottomColor: "rgba(111,231,255,0.35)" },
   infoLinkText: { color: "#6FE7FF", fontSize: 16, fontWeight: "700", textAlign: "center" },
+  infoLinksToggle: { width: 82, height: 32, alignItems: "center", justifyContent: "center", marginTop: 3 },
+  infoLinksToggleText: { color: "#6FE7FF", fontSize: 28, fontWeight: "700", lineHeight: 28 },
+  infoLinksDropdown: { width: "100%", alignItems: "center" },
   footer: { position: "absolute", bottom: 22, color: "rgba(247,250,255,0.72)", fontSize: 12 },
   gameOverScreen: { flex: 1, width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#02050d" },
   gameOverContent: { width: "100%", maxWidth: 620, alignItems: "center", paddingHorizontal: 24 },
