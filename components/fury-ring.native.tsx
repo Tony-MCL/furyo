@@ -79,6 +79,7 @@ export type FuryGameOverResult = {
 
 export type FuryReviveHandle = {
   useRevive: () => boolean;
+  useAdRevive: () => boolean;
 };
 
 type FuryRingProps = {
@@ -741,15 +742,8 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
     onGameOver({ difficulty, score: currentScore, highScore: nextHighScore });
   }, [difficulty, onGameOver]);
 
-  const useStoredRevive = useCallback(() => {
-    if (!gameOverRef.current || reviveUsedRef.current || reviveCountRef.current <= 0) {
-      return false;
-    }
-
-    const nextReviveCount = reviveCountRef.current - 1;
-    reviveCountRef.current = nextReviveCount;
-    setReviveCount(nextReviveCount);
-    void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
+  const activateRevive = useCallback(() => {
+    if (!gameOverRef.current || reviveUsedRef.current) return false;
 
     reviveUsedRef.current = true;
     setReviveUsed(true);
@@ -759,13 +753,34 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
     return true;
   }, [showReviveFeedback, startReviveCountdown]);
 
+  const useStoredRevive = useCallback(() => {
+    if (reviveCountRef.current <= 0) return false;
+
+    const nextReviveCount = reviveCountRef.current - 1;
+    reviveCountRef.current = nextReviveCount;
+    setReviveCount(nextReviveCount);
+    void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
+
+    const activated = activateRevive();
+    if (!activated) {
+      reviveCountRef.current += 1;
+      setReviveCount(reviveCountRef.current);
+      void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(reviveCountRef.current)).catch(() => {});
+    }
+    return activated;
+  }, [activateRevive]);
+
+  const useAdRevive = useCallback(() => {
+    return activateRevive();
+  }, [activateRevive]);
+
   useEffect(() => {
     if (!reviveHandle) return;
-    reviveHandle.current = { useRevive: useStoredRevive };
+    reviveHandle.current = { useRevive: useStoredRevive, useAdRevive };
     return () => {
       reviveHandle.current = null;
     };
-  }, [reviveHandle, useStoredRevive]);
+  }, [reviveHandle, useAdRevive, useStoredRevive]);
 
   const handleCollision = useCallback((id: number) => {
     if (gameOverRef.current || pausedRef.current) return;
