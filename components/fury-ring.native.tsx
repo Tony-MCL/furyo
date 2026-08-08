@@ -33,7 +33,6 @@ const DEGREES_PER_MS = 360 / ROTATION_DURATION_MS;
 const EDGE_MARGIN = 16;
 const REVIVE_INVULNERABILITY_MS = 1000;
 const RESUME_COUNTDOWN_SECONDS = 3;
-const MAX_REVIVES = 3;
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const TEST_START_REVIVES = 3;
 
@@ -599,7 +598,7 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
         let nextCount = TEST_START_REVIVES;
         if (storedValue !== null) {
           const parsed = Number.parseInt(storedValue, 10);
-          if (Number.isFinite(parsed)) nextCount = clamp(parsed, 0, MAX_REVIVES);
+          if (Number.isFinite(parsed) && parsed >= 0) nextCount = parsed;
         } else {
           await AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextCount));
         }
@@ -864,7 +863,7 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
       <Text pointerEvents="none" style={styles.scoreText}>{strings.score}: {score}</Text>
       <Text pointerEvents="none" style={styles.difficultyText}>{difficultyConfig.label}</Text>
       <Text pointerEvents="none" style={styles.reviveStatusText}>
-        {strings.revives} {reviveCount}/{MAX_REVIVES}{reviveUsed ? ` · ${strings.usedThisRound}` : reviveCount > 0 ? ` · ${strings.ready}` : ` · ${strings.empty}`}
+        {strings.revives} {reviveCount}{reviveUsed ? ` · ${strings.usedThisRound}` : reviveCount > 0 ? ` · ${strings.ready}` : ` · ${strings.empty}`}
       </Text>
 
       {balls.map((ball) => (
