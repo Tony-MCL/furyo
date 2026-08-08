@@ -35,11 +35,15 @@ const REVIVE_INVULNERABILITY_MS = 1000;
 const RESUME_COUNTDOWN_SECONDS = 3;
 const REVIVE_STORAGE_KEY = "fury-o-revives";
 const TEST_START_REVIVES = 3;
+const FIRST_REVIVE_BALL_DELAY_MS = 30000;
+const REVIVE_BALL_MIN_INTERVAL_MS = 15000;
+const REVIVE_BALL_MAX_INTERVAL_MS = 20000;
 
 const RING_COLOR = "#FFB000";
 const BALL_COLOR = "#6FE7FF";
 const TEXT_COLOR = "#F7FAFF";
 const BONUS_COLOR = "#FFD166";
+const REVIVE_BALL_COLOR = "#7CFF6B";
 
 const BALL_SIZE = 12;
 const BALL_RADIUS = BALL_SIZE / 2;
@@ -88,7 +92,7 @@ type FuryRingProps = {
 };
 
 type Edge = "top" | "right" | "bottom" | "left";
-type ProjectileKind = "ball" | "bomb" | "bonus";
+type ProjectileKind = "ball" | "bomb" | "bonus" | "revive";
 
 type BallData = {
   id: number;
@@ -249,7 +253,7 @@ function createProjectile(
   const slow = kind === "ball" && Math.random() < SLOW_BALL_CHANCE;
   const baseDuration = randomBetween(config.ballMinTravelMs, config.ballMaxTravelMs);
   const durationMultiplier =
-    kind === "bonus"
+    kind === "bonus" || kind === "revive"
       ? getBonusDurationMultiplier(difficulty)
       : slow
         ? SLOW_BALL_DURATION_MULTIPLIER
@@ -304,7 +308,7 @@ type SpawnBallProps = {
   getRingState: () => RingState;
   onCollision: (id: number) => void;
   onEaten: (id: number, kind: ProjectileKind) => void;
-  onDone: (id: number) => void;
+  onDone: (id: number, kind: ProjectileKind) => void;
 };
 
 function SpawnBall({
@@ -363,13 +367,13 @@ function SpawnBall({
     animationRef.current = animation;
 
     animation.start(({ finished }) => {
-      if (finished && !resolvedRef.current) onDone(ball.id);
+      if (finished && !resolvedRef.current) onDone(ball.id, ball.kind);
     });
 
     return () => {
       animation.stop();
     };
-  }, [ball.duration, ball.id, onDone, paused, progress]);
+  }, [ball.duration, ball.id, ball.kind, onDone, paused, progress]);
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],
@@ -387,6 +391,17 @@ function SpawnBall({
         style={[styles.bonusBall, { transform: [{ translateX }, { translateY }] }]}
       >
         <Text style={styles.bonusBallText}>10</Text>
+      </Animated.View>
+    );
+  }
+
+  if (ball.kind === "revive") {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.reviveBall, { transform: [{ translateX }, { translateY }] }]}
+      >
+        <Text style={styles.reviveBallText}>+1</Text>
       </Animated.View>
     );
   }
@@ -449,6 +464,8 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
   const scoreRef = useRef(0);
   const reviveUsedRef = useRef(false);
   const reviveCountRef = useRef(0);
+  const reviveBallCollectedRef = useRef(false);
+  const activeReviveBallRef = useRef(false);
   const invulnerableUntilRef = useRef(0);
   const pausedRef = useRef(false);
   const pauseStartedAtRef = useRef<number | null>(null);
@@ -699,8 +716,77 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
     };
   }, [difficulty, windowHeight, windowWidth]);
 
+  useEffect(() => {
+    if (windowWidth <= 0 || windowHeight <= 0) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let firstAttempt = true;
+
+    const scheduleNextReviveBall = (delay: number) => {
+      timeoutId = setTimeout(() => {
+        if (gameOverRef.current || reviveBallCollectedRef.current) return;
+        if (pausedRef.current || activeReviveBallRef.current) {
+          scheduleNextReviveBall(500);
+          return;
+        }
+
+        activeReviveBallRef.current = true;
+        setBalls((currentBalls) => {
+          const reviveBall = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, "revive");
+          nextBallIdRef.current += 1;
+          return [...currentBalls, reviveBall];
+        });
+      }, delay);
+    };
+
+    scheduleNextReviveBall(FIRST_REVIVE_BALL_DELAY_MS);
+
+    const interval = setInterval(() => {
+      if (
+        firstAttempt ||
+        gameOverRef.current ||
+        pausedRef.current ||
+        reviveBallCollectedRef.current ||
+        activeReviveBallRef.current
+      ) return;
+      firstAttempt = false;
+    }, 1000);
+
+    return () => {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      clearInterval(interval);
+    };
+  }, [difficulty, windowHeight, windowWidth]);
+
+  const scheduleReviveBallAfterMissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const removeBall = useCallback((id: number) => {
     setBalls((currentBalls) => currentBalls.filter((ball) => ball.id !== id));
+  }, []);
+
+  const handleBallDone = useCallback((id: number, kind: ProjectileKind) => {
+    removeBall(id);
+    if (kind !== "revive" || gameOverRef.current || reviveBallCollectedRef.current) return;
+    activeReviveBallRef.current = false;
+    if (scheduleReviveBallAfterMissRef.current !== null) {
+      clearTimeout(scheduleReviveBallAfterMissRef.current);
+    }
+    scheduleReviveBallAfterMissRef.current = setTimeout(() => {
+      if (gameOverRef.current || pausedRef.current || reviveBallCollectedRef.current || activeReviveBallRef.current) return;
+      activeReviveBallRef.current = true;
+      setBalls((currentBalls) => {
+        const reviveBall = createProjectile(nextBallIdRef.current, windowWidth, windowHeight, difficulty, "revive");
+        nextBallIdRef.current += 1;
+        return [...currentBalls, reviveBall];
+      });
+    }, randomBetween(REVIVE_BALL_MIN_INTERVAL_MS, REVIVE_BALL_MAX_INTERVAL_MS));
+  }, [difficulty, removeBall, windowHeight, windowWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (scheduleReviveBallAfterMissRef.current !== null) {
+        clearTimeout(scheduleReviveBallAfterMissRef.current);
+      }
+    };
   }, []);
 
   const bonusFeedbackPointsRef = useRef(EATEN_BALL_BONUS);
@@ -805,6 +891,23 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
       return;
     }
     removeBall(id);
+
+    if (kind === "revive") {
+      if (reviveBallCollectedRef.current) return;
+      reviveBallCollectedRef.current = true;
+      activeReviveBallRef.current = false;
+      if (scheduleReviveBallAfterMissRef.current !== null) {
+        clearTimeout(scheduleReviveBallAfterMissRef.current);
+        scheduleReviveBallAfterMissRef.current = null;
+      }
+      const nextReviveCount = reviveCountRef.current + 1;
+      reviveCountRef.current = nextReviveCount;
+      setReviveCount(nextReviveCount);
+      void AsyncStorage.setItem(REVIVE_STORAGE_KEY, String(nextReviveCount)).catch(() => {});
+      showBonusFeedback(1);
+      return;
+    }
+
     const points = kind === "bonus" ? SPECIAL_BALL_BONUS : EATEN_BALL_BONUS;
     setBonusPoints((current) => current + points);
     showBonusFeedback(points);
@@ -874,7 +977,7 @@ export default function FuryRing({ difficulty, onGameOver, reviveHandle }: FuryR
           getRingState={getRingState}
           onCollision={handleCollision}
           onEaten={handleEaten}
-          onDone={removeBall}
+          onDone={handleBallDone}
         />
       ))}
 
@@ -975,6 +1078,27 @@ const styles = StyleSheet.create({
   },
   bonusBallText: {
     color: "#3A2500",
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: "900",
+  },
+  reviveBall: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 18,
+    height: 18,
+    marginLeft: -9,
+    marginTop: -9,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: REVIVE_BALL_COLOR,
+    borderWidth: 2,
+    borderColor: "#E6FFE1",
+  },
+  reviveBallText: {
+    color: "#08210B",
     fontSize: 8,
     lineHeight: 10,
     fontWeight: "900",
