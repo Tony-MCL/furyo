@@ -1,7 +1,7 @@
 const {
   withDangerousMod,
   withAndroidManifest,
-} = require("@expo/config-plugins");
+} = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
@@ -10,11 +10,7 @@ const PACKAGE_PATH = PACKAGE_NAME.replace(/\./g, "/");
 const CLASS_NAME = "TransientNavigationBarPackage";
 
 function withTransientNavigationBar(config) {
-  config = withAndroidManifest(config, (config) => {
-    // No manifest changes are required, but keeping this mod makes the plugin
-    // explicitly Android-scoped and easy to extend later if needed.
-    return config;
-  });
+  config = withAndroidManifest(config, (config) => config);
 
   return withDangerousMod(config, [
     "android",
@@ -36,6 +32,7 @@ function withTransientNavigationBar(config) {
       const source = `package ${PACKAGE_NAME}
 
 import android.app.Activity
+import android.content.Context
 import android.os.Bundle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -44,7 +41,7 @@ import expo.modules.core.interfaces.Package
 import expo.modules.core.interfaces.ReactActivityLifecycleListener
 
 class ${CLASS_NAME} : Package {
-  override fun createReactActivityLifecycleListeners(activityContext: Activity): List<ReactActivityLifecycleListener> {
+  override fun createReactActivityLifecycleListeners(activityContext: Context): List<ReactActivityLifecycleListener> {
     return listOf(object : ReactActivityLifecycleListener {
       override fun onCreate(activity: Activity, savedInstanceState: Bundle?) {
         configure(activity)
