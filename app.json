@@ -9,8 +9,8 @@
       [
         "expo-navigation-bar",
         {
-          "visibility": "hidden",
-          "barStyle": "light",
+          "hidden": true,
+          "style": "light",
           "enforceContrast": false
         }
       ],
@@ -22,6 +22,10 @@
         }
       ]
     ],
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "barStyle": "light-content"
+    },
     "android": {
       "package": "com.morningcoffeelabs.furyo",
       "icon": "./public/fury-icon.png"
