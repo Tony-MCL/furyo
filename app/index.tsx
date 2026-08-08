@@ -57,6 +57,7 @@ type GameOverResult = {
 export default function Page() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [gameSessionKey, setGameSessionKey] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
   const [showMoreInfoLinks, setShowMoreInfoLinks] = useState(false);
   const [difficulty, setDifficulty] = useState<FuryDifficulty>("normal");
@@ -144,7 +145,6 @@ export default function Page() {
     }).start(({ finished }) => {
       if (finished) {
         setGameOverTransitioning(false);
-        setIsPlaying(false);
         void loadRevives();
       }
     });
@@ -156,6 +156,7 @@ export default function Page() {
     setGameOverResult(null);
     setGameOverTransitioning(false);
     setRevivingFromGameOver(false);
+    setGameSessionKey((current) => current + 1);
     setIsPlaying(true);
   }, [gameOverProgress]);
 
@@ -179,7 +180,8 @@ export default function Page() {
 
     try {
       if (revives > 0) {
-        resumeCurrentRun();
+        const resumed = resumeCurrentRun();
+        if (!resumed) setReviveMessage(strings.adNotReady);
         return;
       }
 
@@ -222,7 +224,7 @@ export default function Page() {
   if (isPlaying) {
     return (
       <View style={styles.playShell}>
-        <FuryRing difficulty={difficulty} onGameOver={handleGameOver} reviveHandle={reviveHandle} />
+        <FuryRing key={gameSessionKey} difficulty={difficulty} onGameOver={handleGameOver} reviveHandle={reviveHandle} />
         {adsReady && <GameBanner />}
         {gameOverTransitioning && gameOverResult && (
           <View pointerEvents="none" style={styles.gameOverTransitionLayer}>
@@ -236,6 +238,20 @@ export default function Page() {
             >
               <GameOverScreen result={gameOverResult} interactive={false} revives={revives} />
             </Animated.View>
+          </View>
+        )}
+        {!gameOverTransitioning && gameOverResult && (
+          <View style={styles.gameOverTransitionLayer}>
+            <GameOverScreen
+              result={gameOverResult}
+              interactive
+              revives={revives}
+              reviving={revivingFromGameOver}
+              reviveMessage={reviveMessage}
+              onRevive={() => void useRevive()}
+              onPlayAgain={startNewGame}
+              onHome={goHome}
+            />
           </View>
         )}
       </View>
